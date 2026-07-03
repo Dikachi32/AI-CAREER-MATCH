@@ -1,0 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #2563EB;
+    --primary-dark: #1D4ED8;
+    --dark: #0F172A;
+    --secondary-text: #64748B;
+    --border: #E2E8F0;
+    --success: #22C55E;
+    --background: #F8FAFC;
+    --card: #FFFFFF;
+    --muted: #F1F5F9;
+  }
+
+  * {
+    @apply border-[#E2E8F0];
+  }
+
+  body {
+    @apply bg-[#F8FAFC] text-[#0F172A] antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(15,23,42,0.08)];
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-[#2563EB] to-[#7C3AED] bg-clip-text text-transparent;
+  }
+
+  .btn-primary {
+    @apply bg-[#2563EB] text-white px-6 py-3 rounded-xl font-medium 
+           transition-all duration-300 hover:bg-[#1D4ED8] hover:shadow-lg hover:shadow-blue-500/25
+           active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-[#0F172A] border border-[#E2E8F0] px-6 py-3 rounded-xl font-medium
+           transition-all duration-300 hover:border-[#2563EB] hover:text-[#2563EB]
+           active:scale-[0.98];
+  }
+
+  .card-hover {
+    @apply transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(15,23,42,0.12)];
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border border-[#E2E8F0] bg-white
+           text-[#0F172A] placeholder-[#94A3B8]
+           focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]
+           transition-all duration-200;
+  }
+
+  .section-padding {
+    @apply px-4 sm:px-6 lg:px-8 xl:px-16 2xl:px-24;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.6s ease-out forwards;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+.progress-fill {
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.recharts-polar-grid-angle line {
+  stroke: #E2E8F0;
+}
+
+.recharts-polar-grid-concentric circle {
+  stroke: #E2E8F0;
+}
