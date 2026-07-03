@@ -253,3 +253,7 @@ pnpm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# User uploaded CVs
+backend/uploads/*
+!backend/uploads/.gitkeep
