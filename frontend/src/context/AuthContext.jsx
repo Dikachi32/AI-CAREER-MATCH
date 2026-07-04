@@ -1,69 +1,118 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getProfile } from '../services/api';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import api from '../services/api';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(localStorage.getItem('token') || null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [error, setError] = useState(null);
 
-  // Load user profile when token exists
-  useEffect(() => {
-    const loadUser = async () => {
-      const storedToken = localStorage.getItem('token');
-      if (storedToken) {
-        try {
-          const res = await getProfile();
-          setUser(res.data.user);
-          setToken(storedToken);
-        } catch (err) {
-          // Token invalid or expired
-          localStorage.removeItem('token');
-          setToken(null);
-        }
+  const fetchProfile = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        return;
       }
+      const res = await api.get('/profile');
+      setUser(res.data.user);
+      setError(null);
+    } catch (err) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem('token');
+        setUser(null);
+      }
+      setError(err.response?.data?.error || 'Failed to load profile');
+    } finally {
       setLoading(false);
-    };
-    
-    loadUser();
+    }
   }, []);
 
-  const login = (newToken, userData) => {
-    localStorage.setItem('token', newToken);
-    setToken(newToken);
-    setUser(userData);
-    navigate('/dashboard');
-  };
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
-  const logout = () => {
+  const login = useCallback(async (email, password) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.post('/login', { email, password });
+      localStorage.setItem('token', res.data.token);
+      setUser(res.data.user);
+      return { success: true };
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Login failed';
+      setError(msg);
+      return { success: false, error: msg };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const register = useCallback(async (email, password, name) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.post('/register', { email, password, name });
+      localStorage.setItem('token', res.data.token);
+      setUser(res.data.user);
+      return { success: true };
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Registration failed';
+      setError(msg);
+      return { success: false, error: msg };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const logout = useCallback(() => {
     localStorage.removeItem('token');
-    setToken(null);
     setUser(null);
-    navigate('/login');
-  };
+    setError(null);
+    window.location.href = '/auth';
+  }, []);
 
-  const updateUser = (updates) => {
-    setUser(prev => prev ? { ...prev, ...updates } : null);
-  };
+  const updateProfile = useCallback(async (data) => {
+    setLoading(true);
+    try {
+      const res = await api.put('/profile', data);
+      setUser(res.data.user);
+      return { success: true };
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Update failed';
+      setError(msg);
+      return { success: false, error: msg };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const value = {
+    user,
+    loading,
+    error,
+    isAuthenticated: !!user,
+    login,
+    register,
+    logout,
+    updateProfile,
+    refreshProfile: fetchProfile
+  };
 
   return (
-    <AuthContext.Provider value={{ token, user, login, logout, updateUser }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 }

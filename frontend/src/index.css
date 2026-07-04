@@ -29,6 +29,21 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Poppins', system-ui, sans-serif;
   }
+
+  /* Safe area for mobile bottom nav */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Focus visible for accessibility */
+  :focus-visible {
+    @apply outline-none ring-2 ring-[#2563EB]/30 ring-offset-2;
+  }
 }
 
 @layer components {
@@ -41,15 +56,15 @@
   }
 
   .btn-primary {
-    @apply bg-[#2563EB] text-white px-6 py-3 rounded-xl font-medium 
-           transition-all duration-300 hover:bg-[#1D4ED8] hover:shadow-lg hover:shadow-blue-500/25
-           active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-[#2563EB] text-white px-6 py-3 rounded-xl font-medium
+      transition-all duration-300 hover:bg-[#1D4ED8] hover:shadow-lg hover:shadow-blue-500/25
+      active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-secondary {
     @apply bg-white text-[#0F172A] border border-[#E2E8F0] px-6 py-3 rounded-xl font-medium
-           transition-all duration-300 hover:border-[#2563EB] hover:text-[#2563EB]
-           active:scale-[0.98];
+      transition-all duration-300 hover:border-[#2563EB] hover:text-[#2563EB]
+      active:scale-[0.98];
   }
 
   .card-hover {
@@ -58,9 +73,9 @@
 
   .input-field {
     @apply w-full px-4 py-3 rounded-xl border border-[#E2E8F0] bg-white
-           text-[#0F172A] placeholder-[#94A3B8]
-           focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]
-           transition-all duration-200;
+      text-[#0F172A] placeholder-[#94A3B8]
+      focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]
+      transition-all duration-200;
   }
 
   .section-padding {
@@ -74,6 +89,28 @@
   .animate-slide-up {
     animation: slideUp 0.6s ease-out forwards;
   }
+
+  /* Skeleton shimmer */
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, #E2E8F0 25%, #F1F5F9 50%, #E2E8F0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Line clamp utilities */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 }
 
 @keyframes fadeIn {
@@ -84,6 +121,11 @@
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 ::-webkit-scrollbar {
@@ -114,4 +156,194 @@
 
 .recharts-polar-grid-concentric circle {
   stroke: #E2E8F0;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================
+   PHASE 5: ACCESSIBILITY & PERFORMANCE
+   ============================================ */
+
+/* Focus visible for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip link for screen readers */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #2563EB;
+  color: white;
+  padding: 8px 16px;
+  z-index: 100;
+  transition: top 0.3s;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Better touch targets on mobile */
+@media (max-width: 640px) {
+  button, a, input, select, textarea {
+    min-height: 44px;
+  }
+  
+  .section-padding {
+    @apply px-4;
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .animate-pulse,
+  .animate-spin,
+  .animate-bounce {
+    animation: none !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .btn-primary {
+    border: 2px solid currentColor;
+  }
+  
+  .card-hover {
+    border: 2px solid #0F172A;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white;
+    color: black;
+  }
+  
+  .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl {
+    box-shadow: none !important;
+  }
+}
+
+/* Loading state improvements */
+.loading-shimmer {
+  background: linear-gradient(90deg, #E2E8F0 25%, #F1F5F9 50%, #E2E8F0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Better scrollbar for webkit */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Mobile bottom nav safe area */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-area-pb {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+  }
+}
+
+/* Prevent text selection on interactive elements */
+button, [role="button"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Image optimization */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Form validation styles */
+input:invalid:not(:placeholder-shown),
+textarea:invalid:not(:placeholder-shown) {
+  border-color: #EF4444;
+}
+
+input:valid:not(:placeholder-shown),
+textarea:valid:not(:placeholder-shown) {
+  border-color: #22C55E;
+}
+
+/* Tooltip styles */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: #0F172A;
+  color: white;
+  font-size: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
 }
