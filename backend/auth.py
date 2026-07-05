@@ -8,7 +8,7 @@ bcrypt = Bcrypt()
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     email = data.get('email')
     password = data.get('password')
     name = data.get('name', 'User')
@@ -24,7 +24,6 @@ def register():
     db.session.add(user)
     db.session.commit()
     
-    # FIX: cast identity to string
     token = create_access_token(identity=str(user.id))
     return jsonify({
         'message': 'User created',
@@ -34,7 +33,7 @@ def register():
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     email = data.get('email')
     password = data.get('password')
 
@@ -42,7 +41,6 @@ def login():
     if not user or not bcrypt.check_password_hash(user.password, password):
         return jsonify({'error': 'Invalid credentials'}), 401
 
-    # FIX: cast identity to string
     token = create_access_token(identity=str(user.id))
     return jsonify({
         'token': token,
@@ -66,7 +64,7 @@ def update_profile():
     if not user:
         return jsonify({'error': 'User not found'}), 404
     
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     if 'name' in data:
         user.name = data['name']
     if 'location' in data:

@@ -86,20 +86,9 @@ function QuickActionCard({ to, icon: Icon, title, description, color }) {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { cvData, aiProfile, extractedInfo, hasCV, fetchAIProfile, isUploading } = useCV();
+  const { cvData, aiProfile, extractedInfo, hasCV, isUploading } = useCV();
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState(null);
-
-  // Load AI profile on mount
-  useEffect(() => {
-    const loadProfile = async () => {
-      if (hasCV && !aiProfile) {
-        await fetchAIProfile();
-      }
-      setLoading(false);
-    };
-    loadProfile();
-  }, [hasCV, aiProfile, fetchAIProfile]);
 
   // Build profile data from AI analysis or fallbacks
   useEffect(() => {
@@ -146,6 +135,7 @@ export default function Dashboard() {
         current_company: extractedInfo.current_company || user?.company,
       });
     }
+    setLoading(false);
   }, [aiProfile, extractedInfo, user]);
 
   if (loading || isUploading) {
@@ -244,222 +234,167 @@ export default function Dashboard() {
 
           {/* Profile Active Badge */}
           <div className="lg:ml-auto shrink-0">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium border border-emerald-100">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Profile Active
             </span>
           </div>
         </div>
 
-        {/* AI-Generated Info Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-          <AICard
-            icon={Clock}
-            label="Experience"
-            value={info.years_experience ? `${info.years_experience} Years` : 'Not detected'}
-            subvalue={info.years_experience ? 'Total professional experience' : 'Add more details to your CV'}
-            color="blue"
-            delay={0.15}
-          />
-          <AICard
-            icon={GraduationCap}
-            label="Education"
-            value={info.education || 'Not detected'}
-            subvalue={info.education ? 'Highest qualification identified' : 'Education details not found'}
-            color="purple"
-            delay={0.2}
-          />
-          <AICard
-            icon={Briefcase}
-            label="Current Role"
-            value={info.current_role || 'Not detected'}
-            subvalue={info.current_role ? 'AI-inferred from your CV' : 'No role detected'}
-            color="green"
-            delay={0.25}
-          />
-          <AICard
-            icon={MapPin}
-            label="Location"
-            value={info.location || 'Not detected'}
-            subvalue={info.location ? 'Location extracted from CV' : 'Add location preference'}
-            color="amber"
-            delay={0.3}
-          />
+        {/* Profile Meta Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-[#F1F5F9]">
+          {[
+            { icon: MapPin, label: 'Location', value: info.location },
+            { icon: Building2, label: 'Company', value: info.current_company },
+            { icon: GraduationCap, label: 'Education', value: info.education },
+            { icon: Clock, label: 'Experience', value: info.years_experience },
+          ].map((item, i) => (
+            <div key={i} className="text-center lg:text-left">
+              <p className="text-xs text-[#94A3B8] mb-1">{item.label}</p>
+              <p className="text-sm font-medium text-[#0F172A] truncate">{item.value || 'Not set'}</p>
+            </div>
+          ))}
         </div>
-
-        {/* Professional Summary (AI-Generated) */}
-        {info.professional_summary && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.35 }}
-            className="mt-6 p-4 bg-gradient-to-r from-[#2563EB]/5 to-[#7C3AED]/5 rounded-xl border border-[#2563EB]/10"
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-[#2563EB]" />
-              <span className="text-sm font-semibold text-[#2563EB]">AI-Generated Summary</span>
-            </div>
-            <p className="text-sm text-[#0F172A] leading-relaxed">{info.professional_summary}</p>
-          </motion.div>
-        )}
-
-        {/* Certifications */}
-        {info.certifications?.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="mt-4"
-          >
-            <h4 className="text-sm font-semibold text-[#0F172A] mb-2 flex items-center gap-2">
-              <Award className="w-4 h-4 text-[#2563EB]" />
-              Certifications
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {info.certifications.map((cert, i) => (
-                <span key={i} className="inline-flex items-center px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium border border-amber-100">
-                  <Award className="w-3 h-3 mr-1" />
-                  {cert}
-                </span>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Languages */}
-        {info.languages?.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.45 }}
-            className="mt-4"
-          >
-            <h4 className="text-sm font-semibold text-[#0F172A] mb-2 flex items-center gap-2">
-              <Globe className="w-4 h-4 text-[#2563EB]" />
-              Languages
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {info.languages.map((lang, i) => (
-                <span key={i} className="inline-flex items-center px-3 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs font-medium border border-cyan-100">
-                  <Globe className="w-3 h-3 mr-1" />
-                  {lang}
-                </span>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Projects */}
-        {info.projects?.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="mt-4"
-          >
-            <h4 className="text-sm font-semibold text-[#0F172A] mb-2 flex items-center gap-2">
-              <Target className="w-4 h-4 text-[#2563EB]" />
-              Notable Projects
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {info.projects.map((proj, i) => (
-                <span key={i} className="inline-flex items-center px-3 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-medium border border-rose-100">
-                  <Target className="w-3 h-3 mr-1" />
-                  {proj}
-                </span>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Achievements */}
-        {info.achievements?.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.55 }}
-            className="mt-4"
-          >
-            <h4 className="text-sm font-semibold text-[#0F172A] mb-2 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-[#2563EB]" />
-              Key Achievements
-            </h4>
-            <ul className="space-y-2">
-              {info.achievements.slice(0, 3).map((ach, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-[#0F172A]">
-                  <TrendingUp className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                  <span className="line-clamp-2">{ach}</span>
-                </li>
-              ))}
-            </ul>
-          </motion.div>
-        )}
-
-        {/* Structured Skills by Category */}
-        {Object.keys(structured).length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            className="mt-6"
-          >
-            <h4 className="text-sm font-semibold text-[#0F172A] mb-3 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-[#2563EB]" />
-              AI-Categorized Skills
-            </h4>
-            <div className="space-y-3">
-              {Object.entries(structured).map(([category, skills]) => (
-                <div key={category} className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-[#64748B] uppercase w-24 shrink-0">{category}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {skills.map((skill, i) => (
-                      <SkillTag key={i} skill={skill} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Extracted Skills (Fallback/All) */}
-        {allSkills.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.65 }}
-            className="mt-6 pt-6 border-t border-[#E2E8F0]"
-          >
-            <h4 className="text-sm font-semibold text-[#0F172A] mb-3">All Extracted Skills</h4>
-            <div className="flex flex-wrap gap-2">
-              {techSkills.map((skill, i) => (
-                <SkillTag key={`t-${i}`} skill={skill} type="technical" />
-              ))}
-              {softSkills.map((skill, i) => (
-                <SkillTag key={`s-${i}`} skill={skill} type="soft" />
-              ))}
-            </div>
-          </motion.div>
-        )}
       </motion.div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <QuickActionCard
-          to="/recommendations"
-          icon={Briefcase}
-          title="Job Recommendations"
-          description="View AI-matched opportunities tailored to your profile."
-          color="blue"
-        />
-        <QuickActionCard
-          to="/skills"
-          icon={BarChart3}
-          title="Skill Analytics"
-          description="Deep-dive into your skills and discover growth paths."
-          color="purple"
-        />
+      {/* AI Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <AICard icon={Target} label="Match Score" value={`${activity.match_score || 0}%`} subvalue="Avg. job match" color="blue" delay={0.1} />
+        <AICard icon={Briefcase} label="Jobs Viewed" value={activity.jobs_viewed || 0} subvalue="This week" color="purple" delay={0.2} />
+        <AICard icon={Award} label="Skills" value={allSkills.length} subvalue={`${techSkills.length} technical`} color="green" delay={0.3} />
+        <AICard icon={TrendingUp} label="Profile Views" value={activity.profile_views || 0} subvalue="By recruiters" color="amber" delay={0.4} />
       </div>
+
+      {/* Skills Section */}
+      {allSkills.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-white rounded-2xl border border-[#E2E8F0] p-6 mb-8 shadow-sm"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-[#0F172A] flex items-center gap-2">
+              <Zap className="w-5 h-5 text-[#2563EB]" />
+              Extracted Skills
+            </h3>
+            <span className="text-xs text-[#94A3B8]">{allSkills.length} total</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {techSkills.map((skill, i) => (
+              <SkillTag key={`t-${i}`} skill={skill} type="technical" />
+            ))}
+            {softSkills.map((skill, i) => (
+              <SkillTag key={`s-${i}`} skill={skill} type="soft" />
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Structured Skills (if available) */}
+      {Object.keys(structured).length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-white rounded-2xl border border-[#E2E8F0] p-6 mb-8 shadow-sm"
+        >
+          <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-[#2563EB]" />
+            Skill Categories
+          </h3>
+          <div className="space-y-4">
+            {Object.entries(structured).map(([category, skills], i) => (
+              <div key={i}>
+                <p className="text-sm font-medium text-[#64748B] mb-2 capitalize">{category}</p>
+                <div className="flex flex-wrap gap-2">
+                  {skills.map((skill, j) => (
+                    <span key={j} className="px-2.5 py-1 bg-[#F1F5F9] text-[#0F172A] rounded-lg text-xs font-medium">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Quick Actions */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+      >
+        <h3 className="font-semibold text-[#0F172A] mb-4">Quick Actions</h3>
+        <div className="grid md:grid-cols-3 gap-4">
+          <QuickActionCard
+            to="/recommendations"
+            icon={Briefcase}
+            title="Job Recommendations"
+            description="Discover roles matched to your profile"
+            color="blue"
+          />
+          <QuickActionCard
+            to="/analytics"
+            icon={BarChart3}
+            title="Skill Analytics"
+            description="Deep-dive into your skill gaps"
+            color="purple"
+          />
+          <QuickActionCard
+            to="/upload"
+            icon={FileText}
+            title="Update CV"
+            description="Refresh your profile with new experience"
+            color="green"
+          />
+        </div>
+      </motion.div>
+
+      {/* Recent Activity / Certifications */}
+      {(info.certifications?.length > 0 || info.projects?.length > 0) && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="mt-8 grid md:grid-cols-2 gap-6"
+        >
+          {info.certifications?.length > 0 && (
+            <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+              <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
+                <Award className="w-5 h-5 text-[#2563EB]" />
+                Certifications
+              </h3>
+              <ul className="space-y-2">
+                {info.certifications.map((cert, i) => (
+                  <li key={i} className="text-sm text-[#334155] flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#2563EB] mt-1.5 shrink-0" />
+                    {cert}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {info.projects?.length > 0 && (
+            <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+              <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
+                <Globe className="w-5 h-5 text-[#2563EB]" />
+                Projects
+              </h3>
+              <ul className="space-y-2">
+                {info.projects.map((proj, i) => (
+                  <li key={i} className="text-sm text-[#334155] flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#7C3AED] mt-1.5 shrink-0" />
+                    {proj}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </motion.div>
+      )}
     </div>
   );
 }

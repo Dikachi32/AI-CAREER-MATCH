@@ -80,9 +80,44 @@ class CVOptimizerEngine:
 
     def _extract_keywords(self, text: str) -> List[str]:
         """Extract relevant keywords from text."""
-        # Technical keywords
-        tech_pattern = r'\b([a-z]+(?:\.js|\.ts|\.py|\.go|\.rs|\.java)?|(?:aws|gcp|azure|docker|kubernetes|react|angular|vue|node|python|java|go|rust|sql|nosql|mongodb|postgresql|redis|elasticsearch|jenkins|terraform|ansible|git|github|gitlab|ci/cd|agile|scrum|kanban|jira|confluence|slack|teams|zoom|figma|sketch|adobe|photoshop|illustrator|xd|principle|framer|invision|zeplin|abstract|sympli|avocode|proto\.io|balsamiq|axure|mockplus|mockingbird|wireframe\.cc|moqups|popapp|marvel|proto\.io|fluidui|pidoco|justinmind|proto\.io|prott|flinto|principle|origami|pixate|form|hype|tumult|tumult hype|tumult hype 3|tumult hype 4|tumult hype pro|tumult hype pro 3|tumult hype pro 4|tumult hype pro 5|tumult hype pro 6|tumult hype pro 7|tumult hype pro 8|tumult hype pro 9|tumult hype pro 10)\b'
-        matches = re.findall(tech_pattern, text.lower())
+        # Technical keywords - using a simple word list instead of broken regex
+        tech_keywords = [
+            'python', 'javascript', 'typescript', 'java', 'go', 'golang', 'rust', 'c++', 'c#',
+            'ruby', 'php', 'swift', 'kotlin', 'scala', 'r', 'matlab', 'perl', 'shell', 'bash',
+            'react', 'reactjs', 'angular', 'vue', 'vuejs', 'svelte', 'nextjs', 'nuxtjs', 'gatsby',
+            'node', 'nodejs', 'express', 'django', 'flask', 'fastapi', 'spring', 'laravel', 'rails',
+            'aws', 'gcp', 'azure', 'docker', 'kubernetes', 'k8s', 'terraform', 'ansible', 'jenkins',
+            'github', 'gitlab', 'bitbucket', 'git', 'ci/cd', 'cicd', 'devops', 'mlops',
+            'sql', 'mysql', 'postgresql', 'postgres', 'mongodb', 'redis', 'elasticsearch', 'dynamodb',
+            'nosql', 'graphql', 'rest', 'api', 'microservices', 'serverless', 'lambda',
+            'tensorflow', 'pytorch', 'keras', 'scikit-learn', 'pandas', 'numpy', 'matplotlib',
+            'machine learning', 'deep learning', 'nlp', 'computer vision', 'ai', 'data science',
+            'agile', 'scrum', 'kanban', 'jira', 'confluence', 'figma', 'sketch', 'tableau',
+            'powerbi', 'excel', 'word', 'powerpoint', 'photoshop', 'illustrator', 'xd',
+            'html', 'css', 'sass', 'less', 'tailwind', 'bootstrap', 'material-ui',
+            'webpack', 'vite', 'rollup', 'babel', 'eslint', 'prettier', 'jest', 'cypress',
+            'selenium', 'junit', 'pytest', 'mocha', 'chai', 'cucumber', 'gatling',
+            'kafka', 'rabbitmq', 'sqs', 'sns', 'event-driven', 'streaming',
+            'oauth', 'jwt', 'sso', 'ldap', 'active directory', 'iam',
+            'prometheus', 'grafana', 'datadog', 'new relic', 'splunk', 'elk',
+            'hadoop', 'spark', 'hive', 'airflow', 'dbt', 'snowflake', 'bigquery',
+            'linux', 'ubuntu', 'centos', 'debian', 'redhat', 'windows', 'macos',
+            'nginx', 'apache', 'tomcat', 'iis', 'cdn', 'cloudfront', 'cloudflare'
+        ]
+        
+        text_lower = text.lower()
+        matches = []
+        for keyword in tech_keywords:
+            # Use word boundaries for single words, substring for multi-word
+            if ' ' in keyword:
+                if keyword in text_lower:
+                    matches.append(keyword)
+            else:
+                # Check as whole word
+                pattern = r'\b' + re.escape(keyword) + r'\b'
+                if re.search(pattern, text_lower):
+                    matches.append(keyword)
+        
         return list(set(matches))[:20]
 
     def _calculate_ats_score(self, cv_keywords: List[str], job_keywords: List[str]) -> int:
@@ -98,17 +133,36 @@ class CVOptimizerEngine:
         years_match = re.search(r'(\d+)\+?\s*years?', cv_text.lower())
         years = years_match.group(1) if years_match else 'several'
 
-        # Extract current role
-        role_patterns = [
-            r'(?:senior|lead|principal|staff)?\s*(?:software|full[- ]?stack|backend|frontend|devops|data|machine learning|ml|ai|cloud|site reliability|sre|mobile|web|security|network|systems|database|platform|infrastructure|solutions|technical|product|project|program|engineering|development|qa|test|automation|performance|reliability|scalability|availability|observability|monitoring|logging|tracing|analytics|business intelligence|bi|data science|data scientist|data engineer|data analyst|data architect|data manager|data director|data vp|data cio|data cto|data coo|data ceo|data founder|data co-founder|data partner|data investor|data board|data advisor|data consultant|data freelancer|data contractor|data intern|data trainee|data graduate|data entry|data junior|data associate|data mid|data senior|data staff|data principal|data distinguished|data fellow|data scientist|data researcher|data professor|data lecturer|data teacher|data instructor|data tutor|data mentor|data coach|data trainer|data educator|data academic|data scholar|data phd|data masters|data bachelor|data undergraduate|data graduate|data postdoc|data researcher|data research|data lab|data laboratory|data institute|data center|data hub|data cluster|data node|data pod|data container|data vm|data virtual machine|data server|data instance|data host|data device|data machine|data computer|data laptop|data desktop|data workstation|data terminal|data console|data shell|data terminal|data command line|data cli|data gui|data interface|data api|data sdk|data library|data framework|data platform|data service|data tool|data utility|data application|data app|data software|data program|data system|data solution|data product|data project|data initiative|data effort|data endeavor|data undertaking|data venture|data startup|data company|data organization|data enterprise|data corporation|data inc|data llc|data ltd|data gmbh|data ag|data sa|data bv|data nv|data plc|data corp|data co|data group|data team|data squad|data crew|data unit|data department|data division|data branch|data sector|data segment|data vertical|data horizontal|data function|data role|data position|data job|data career|data profession|data occupation|data vocation|data calling|data mission|data purpose|data goal|data objective|data target|data aim|data ambition|data aspiration|data dream|data vision|data plan|data strategy|data tactic|data approach|data method|data technique|data process|data procedure|data protocol|data standard|data guideline|data policy|data rule|data regulation|data law|data compliance|data governance|data management|data administration|data operation|data execution|data implementation|data deployment|data delivery|data release|data launch|data rollout|data go-live|data production|data live|data active|data running|data operating|data functioning|data working|data performing|data executing|data processing|data handling|data managing|data controlling|data directing|data leading|data guiding|data steering|data piloting|data navigating|data routing|data switching|data transmitting|data receiving|data sending|data fetching|data pulling|data pushing|data streaming|data batching|data queuing|data buffering|data caching|data storing|data persisting|data saving|data loading|data reading|data writing|data creating|data updating|data deleting|data modifying|data altering|data changing|data transforming|data converting|data translating|data mapping|data matching|data joining|data merging|data combining|data aggregating|data grouping|data sorting|data filtering|data searching|data querying|data indexing|data ranking|data scoring|data rating|data evaluating|data assessing|data measuring|data quantifying|data calculating|data computing|data estimating|data approximating|data predicting|data forecasting|data projecting|data modeling|data simulating|data emulating|data mimicking|data replicating|data duplicating|data copying|data cloning|data backing up|data restoring|data recovering|data archiving|data retaining|data preserving|data protecting|data securing|data encrypting|data hashing|data signing|data verifying|data validating|data authenticating|data authorizing|data permitting|data allowing|data enabling|data activating|data triggering|data initiating|data starting|data beginning|data launching|data kicking off|data spinning up|data booting|data initializing|data setting up|data configuring|data setting|data adjusting|data tuning|data calibrating|data optimizing|data improving|data enhancing|data upgrading|data refining|data polishing|data perfecting|data completing|data finishing|data finalizing|data closing|data ending|data terminating|data shutting down|data stopping|data pausing|data suspending|data resuming|data restarting|data rebooting|data refreshing|data reloading|data renewing|data updating|data upgrading|data migrating|data transitioning|data moving|data transferring|data shifting|data switching|data changing|data swapping|data replacing|data substituting|data alternating|data rotating|data cycling|data iterating|data looping|data repeating|data recurring|data scheduling|data timing|data clocking|data tracking|data monitoring|data observing|data watching|data viewing|data inspecting|data examining|data analyzing|data studying|data researching|data investigating|data exploring|data discovering|data finding|data locating|data identifying|data recognizing|data detecting|data sensing|data perceiving|data noticing|data noting|data recording|data logging|data documenting|data reporting|data presenting|data showing|data displaying|data visualizing|data rendering|data drawing|data plotting|data charting|data graphing|data diagramming|data mapping|data modeling|data prototyping|data mocking|data stubbing|data faking|data simulating|data testing|data verifying|data asserting|data checking|data inspecting|data reviewing|data auditing|data assessing|data evaluating|data judging|data scoring|data grading|data ranking|data rating|data comparing|data contrasting|data differentiating|data distinguishing|data discriminating|data categorizing|data classifying|data labeling|data tagging|data marking|data flagging|data highlighting|data emphasizing|data stressing|data underscoring|data accentuating|data emphasizing|data stressing|data underscoring|data accentuating|data emphasizing|data stressing|data underscoring|data accentuating)\b',
-            r'(?:currently|presently|now|currently working as|currently serving as|currently holding|currently in|currently at)\s+(?:a|an|the)?\s*([a-z\s]+(?:engineer|developer|manager|director|architect|lead|head|chief|vp|president|officer|founder|co-founder|partner|investor|advisor|consultant|contractor|freelancer|intern|trainee|graduate|entry|junior|associate|mid|senior|staff|principal|distinguished|fellow))\b'
+        # Extract current role using simple keyword matching
+        role_keywords = [
+            'software engineer', 'senior software engineer', 'lead software engineer',
+            'full stack developer', 'backend developer', 'frontend developer',
+            'devops engineer', 'data engineer', 'data scientist', 'machine learning engineer',
+            'cloud engineer', 'site reliability engineer', 'mobile developer',
+            'web developer', 'security engineer', 'network engineer', 'systems engineer',
+            'database administrator', 'platform engineer', 'infrastructure engineer',
+            'solutions architect', 'technical lead', 'engineering manager',
+            'product manager', 'project manager', 'program manager', 'qa engineer',
+            'test engineer', 'automation engineer', 'performance engineer',
+            'data analyst', 'business analyst', 'business intelligence analyst',
+            'research scientist', 'research engineer', 'applied scientist',
+            'ai engineer', 'ml engineer', 'nlp engineer', 'computer vision engineer',
+            'robotics engineer', 'blockchain developer', 'game developer',
+            'embedded systems engineer', 'firmware engineer', 'hardware engineer',
+            'ui engineer', 'ux engineer', 'frontend engineer', 'backend engineer',
+            'site engineer', 'support engineer', 'sales engineer', 'pre-sales engineer',
+            'consultant', 'freelancer', 'contractor', 'intern', 'trainee',
+            'graduate engineer', 'junior engineer', 'associate engineer',
+            'staff engineer', 'principal engineer', 'distinguished engineer',
+            'fellow engineer', 'cto', 'cio', 'vp engineering', 'head of engineering',
+            'director of engineering', 'chief architect', 'enterprise architect'
         ]
         
         current_role = 'Professional'
-        for pattern in role_patterns:
-            match = re.search(pattern, cv_text.lower())
-            if match:
-                current_role = match.group(1).strip().title()
+        cv_lower = cv_text.lower()
+        for role in role_keywords:
+            if role in cv_lower:
+                current_role = role.title()
                 break
 
         # Build optimized summary

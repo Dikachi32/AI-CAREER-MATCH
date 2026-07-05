@@ -12,7 +12,7 @@ from recommendation.embedding_matcher import JobMatcher
 from recommendation.job_fetcher import fetch_real_jobs
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from models import db, User
-from auth import auth_bp
+from auth import auth_bp, bcrypt
 from datetime import datetime
 from services.ai_job_intelligence import analyze_job_intelligence, match_cv_to_job
 from services.ai_skill_analytics import analyze_skills
@@ -31,8 +31,10 @@ CORS(app, resources={
     }
 })
 
+# Initialize extensions
 jwt = JWTManager(app)
 db.init_app(app)
+bcrypt.init_app(app)
 app.register_blueprint(auth_bp)
 
 with app.app_context():
@@ -46,42 +48,80 @@ ALLOWED_EXTENSIONS = Config.ALLOWED_EXTENSIONS
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def _add_cors_headers(response):
+    """Ensure CORS headers are present even on error responses."""
+    origin = request.headers.get('Origin')
+    if origin and origin in Config.CORS_ORIGINS:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    return response
+
 # ========== ERROR HANDLERS ==========
 
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({'error': 'Resource not found'}), 404
+    response = jsonify({'error': 'Resource not found'})
+    response.status_code = 404
+    return _add_cors_headers(response)
 
 @app.errorhandler(500)
 def internal_error(error):
     db.session.rollback()
-    return jsonify({'error': 'Internal server error'}), 500
+    response = jsonify({'error': 'Internal server error'})
+    response.status_code = 500
+    return _add_cors_headers(response)
 
 @app.errorhandler(RequestEntityTooLarge)
 def too_large(error):
-    return jsonify({'error': 'File too large. Max size is 16MB.'}), 413
+    response = jsonify({'error': 'File too large. Max size is 16MB.'})
+    response.status_code = 413
+    return _add_cors_headers(response)
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(e):
+    """Catch-all for unhandled exceptions so CORS headers are always present."""
+    db.session.rollback()
+    traceback.print_exc()
+    response = jsonify({
+        'error': 'Internal server error',
+        'details': str(e) if app.debug else None
+    })
+    response.status_code = 500
+    return _add_cors_headers(response)
 
 # ========== JWT ERROR HANDLERS ==========
 
 @jwt.expired_token_loader
 def expired_token_callback(jwt_header, jwt_payload):
-    return jsonify({'error': 'Token expired. Please log in again.'}), 401
+    response = jsonify({'error': 'Token expired. Please log in again.'})
+    response.status_code = 401
+    return _add_cors_headers(response)
 
 @jwt.invalid_token_loader
 def invalid_token_callback(error):
-    return jsonify({'error': 'Invalid authentication token.', 'details': str(error)}), 422
+    response = jsonify({'error': 'Invalid authentication token.', 'details': str(error)})
+    response.status_code = 422
+    return _add_cors_headers(response)
 
 @jwt.unauthorized_loader
 def unauthorized_callback(error):
-    return jsonify({'error': 'Authorization required. Please log in.'}), 401
+    response = jsonify({'error': 'Authorization required. Please log in.'})
+    response.status_code = 401
+    return _add_cors_headers(response)
 
 @jwt.needs_fresh_token_loader
 def token_not_fresh_callback(jwt_header, jwt_payload):
-    return jsonify({'error': 'Fresh token required. Please log in again.'}), 401
+    response = jsonify({'error': 'Fresh token required. Please log in again.'})
+    response.status_code = 401
+    return _add_cors_headers(response)
 
 @jwt.revoked_token_loader
 def revoked_token_callback(jwt_header, jwt_payload):
-    return jsonify({'error': 'Token has been revoked. Please log in again.'}), 401
+    response = jsonify({'error': 'Token has been revoked. Please log in again.'})
+    response.status_code = 401
+    return _add_cors_headers(response)
 
 # ========== REQUEST LOGGING (dev only) ==========
 
@@ -587,20 +627,12 @@ def optimize_cv():
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
-
-        # Check premium access
-        if user.subscription_tier != 'premium':
-            return jsonify({
-                'error': 'Premium required',
-                'message': 'CV Optimization is a premium feature. Upgrade to Demo Premium.'
-            }), 403
+        if not user or not user.cv_data:
+            return jsonify({'error': 'No CV uploaded. Please upload your CV first.'}), 400
 
         data = request.get_json()
         job_title = data.get('job_title', '')
         job_description = data.get('job_description', '')
-
-        if not user.cv_data:
-            return jsonify({'error': 'No CV uploaded'}), 400
 
         try:
             cv_data = json.loads(user.cv_data)
@@ -608,74 +640,13 @@ def optimize_cv():
         except:
             return jsonify({'error': 'Corrupted CV data'}), 500
 
-        # AI optimization
         result = cv_optimize(cv_text, job_title, job_description)
-
-        return jsonify({
-            'message': 'CV optimized successfully',
-            'optimized_summary': result['optimized_summary'],
-            'target_role': result['target_role'],
-            'suggestions': result['suggestions'],
-            'keyword_matches': result['keyword_matches'],
-            'missing_keywords': result['missing_keywords'],
-            'ats_score_before': result['ats_score_before'],
-            'ats_score_after': result['ats_score_after'],
-            'note': 'Full PDF/DOCX generation coming in next release'
-        }), 200
+        return jsonify(result), 200
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
-
-@app.route('/generate_pdf', methods=['POST'])
-@jwt_required()
-def generate_pdf():
-    """
-    Generate PDF from optimized CV.
-    Stub for future implementation.
-    """
-    try:
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
-
-        if user.subscription_tier != 'premium':
-            return jsonify({'error': 'Premium required'}), 403
-
-        return jsonify({
-            'message': 'PDF generation endpoint ready',
-            'status': 'preview',
-            'note': 'Full PDF generation with reportlab will be implemented in the next release'
-        }), 200
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/generate_docx', methods=['POST'])
-@jwt_required()
-def generate_docx():
-    """
-    Generate DOCX from optimized CV.
-    Stub for future implementation.
-    """
-    try:
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
-
-        if user.subscription_tier != 'premium':
-            return jsonify({'error': 'Premium required'}), 403
-
-        return jsonify({
-            'message': 'DOCX generation endpoint ready',
-            'status': 'preview',
-            'note': 'Full DOCX generation with python-docx will be implemented in the next release'
-        }), 200
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

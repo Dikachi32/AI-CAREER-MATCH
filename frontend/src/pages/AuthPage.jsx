@@ -1,15 +1,16 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { login, register } from '../services/api';
 
 export default function AuthPage() {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { login: authLogin } = useAuth();
+  const { login: authLogin, register: authRegister } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -19,20 +20,22 @@ export default function AuthPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return; // Prevent double submission
     setLoading(true);
     setError('');
 
     try {
+      let result;
       if (isLogin) {
-        const res = await login({ email: formData.email, password: formData.password });
-        authLogin(res.data.token, res.data.user);
+        result = await authLogin(formData.email, formData.password);
       } else {
-        const res = await register({ 
-          name: formData.name, 
-          email: formData.email, 
-          password: formData.password 
-        });
-        authLogin(res.data.token, res.data.user);
+        result = await authRegister(formData.email, formData.password, formData.name);
+      }
+
+      if (result.success) {
+        navigate('/dashboard');
+      } else {
+        setError(result.error || 'Authentication failed');
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Something went wrong');

@@ -6,14 +6,13 @@ import {
   ArrowLeft, Building2, MapPin, DollarSign, Briefcase, Globe,
   ExternalLink, Sparkles, Target, TrendingUp, AlertTriangle,
   CheckCircle2, XCircle, Zap, BookOpen, Award, Clock,
-  Shield, BarChart3, Loader2, Lock, X
+  Shield, BarChart3, Loader2, Lock, X, Crown
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCV } from '../context/CVContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { getCVMatch, getJobIntelligence } from '../services/api';
 import SkeletonLoader from '../components/SkeletonLoader';
-import { useState } from 'react';
 
 
 // Match Score Ring
@@ -254,9 +253,10 @@ export default function JobDetails() {
         </div>
 
         {/* Primary Actions */}
-        <div className="flex flex-wrap gap-3 mt-6 pt-6 border-t border-[#E2E8F0]">
+        <div className="flex flex-wrap items-center gap-3 mt-6 pt-6 border-t border-[#F1F5F9]">
           <button
             onClick={handleApply}
+            disabled={!job.apply_link || job.apply_link === '#'}
             className="btn-primary inline-flex items-center gap-2"
           >
             <ExternalLink size={16} />
@@ -267,277 +267,359 @@ export default function JobDetails() {
             className="btn-secondary inline-flex items-center gap-2"
           >
             <Sparkles size={16} />
-            {isPremium ? 'Upgrade My CV' : 'Upgrade My CV (Premium)'}
+            Optimize CV for This Role
           </button>
+          <Link
+            to="/recommendations"
+            className="text-sm text-[#64748B] hover:text-[#0F172A] transition-colors ml-auto"
+          >
+            View Similar Roles
+          </Link>
         </div>
       </motion.div>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+      {/* Tabs */}
+      <div className="flex items-center gap-1 bg-white rounded-xl border border-[#E2E8F0] p-1 mb-6 shadow-sm overflow-x-auto">
         {[
           { id: 'overview', label: 'Overview', icon: BookOpen },
           { id: 'match', label: 'CV Match', icon: Target },
-          { id: 'intelligence', label: 'AI Intelligence', icon: Sparkles },
-        ].map(tab => {
-          const Icon = tab.icon;
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                active ? 'bg-[#2563EB] text-white shadow-md' : 'bg-white text-[#64748B] border border-[#E2E8F0] hover:border-[#2563EB] hover:text-[#2563EB]'
-              }`}
-            >
-              <Icon size={16} />
-              {tab.label}
-            </button>
-          );
-        })}
+          { id: 'intelligence', label: 'AI Intelligence', icon: BarChart3 },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-[#0F172A] text-white shadow-sm' : 'text-[#64748B] hover:bg-[#F1F5F9]'}`}
+          >
+            <tab.icon size={16} />
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Tab Content */}
-      <motion.div
-        key={activeTab}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
+      <AnimatePresence mode="wait">
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
-          <div className="space-y-6">
-            {/* Description */}
-            <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
-              <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
-                <BookOpen size={18} className="text-[#2563EB]" />
-                Job Description
-              </h3>
-              <p className="text-sm text-[#64748B] leading-relaxed whitespace-pre-line">
-                {job.description || 'No detailed description available.'}
-              </p>
-            </div>
+          <motion.div
+            key="overview"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Main Description */}
+              <div className="lg:col-span-2 space-y-6">
+                <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+                  <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
+                    <BookOpen size={18} className="text-[#2563EB]" />
+                    Job Description
+                  </h3>
+                  <div className="prose prose-slate max-w-none text-sm text-[#334155] leading-relaxed whitespace-pre-line">
+                    {job.description}
+                  </div>
+                </div>
 
-            {/* Technology Stack */}
-            <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
-              <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
-                <Zap size={18} className="text-[#2563EB]" />
-                Technology Stack
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {job.matched_skills?.map((skill, i) => (
-                  <span key={i} className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg text-sm font-medium border border-emerald-100">
-                    {skill}
-                  </span>
-                ))}
-                {(!job.matched_skills || job.matched_skills.length === 0) && (
-                  <span className="text-sm text-[#94A3B8]">Skills information not available for this posting.</span>
+                {job.requirements && (
+                  <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+                    <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
+                      <Shield size={18} className="text-[#2563EB]" />
+                      Requirements
+                    </h3>
+                    <ul className="space-y-2">
+                      {job.requirements.map((req, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-[#334155]">
+                          <CheckCircle2 size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+                          {req}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {job.responsibilities && (
+                  <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+                    <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
+                      <Briefcase size={18} className="text-[#2563EB]" />
+                      Responsibilities
+                    </h3>
+                    <ul className="space-y-2">
+                      {job.responsibilities.map((resp, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-[#334155]">
+                          <Zap size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                          {resp}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
-            </div>
 
-            {/* Requirements & Responsibilities */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
-                <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
-                  <Shield size={18} className="text-[#2563EB]" />
-                  Requirements
-                </h3>
-                <ul className="space-y-2">
-                  <li className="flex items-start gap-2 text-sm text-[#64748B]">
-                    <CheckCircle2 size={14} className="text-[#2563EB] shrink-0 mt-0.5" />
-                    Relevant experience in {job.title?.toLowerCase().replace(/[^a-z\\s]/g, '') || 'this field'}
-                  </li>
-                  <li className="flex items-start gap-2 text-sm text-[#64748B]">
-                    <CheckCircle2 size={14} className="text-[#2563EB] shrink-0 mt-0.5" />
-                    Strong technical background with modern tools and frameworks
-                  </li>
-                  <li className="flex items-start gap-2 text-sm text-[#64748B]">
-                    <CheckCircle2 size={14} className="text-[#2563EB] shrink-0 mt-0.5" />
-                    {job.experience_level || 'Relevant'} level experience required
-                  </li>
-                </ul>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
-                <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
-                  <Target size={18} className="text-[#2563EB]" />
-                  Responsibilities
-                </h3>
-                <ul className="space-y-2">
-                  <li className="flex items-start gap-2 text-sm text-[#64748B]">
-                    <CheckCircle2 size={14} className="text-[#2563EB] shrink-0 mt-0.5" />
-                    Design, develop, and maintain scalable software solutions
-                  </li>
-                  <li className="flex items-start gap-2 text-sm text-[#64748B]">
-                    <CheckCircle2 size={14} className="text-[#2563EB] shrink-0 mt-0.5" />
-                    Collaborate with cross-functional teams to deliver features
-                  </li>
-                  <li className="flex items-start gap-2 text-sm text-[#64748B]">
-                    <CheckCircle2 size={14} className="text-[#2563EB] shrink-0 mt-0.5" />
-                    Ensure code quality through testing and code reviews
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* CV MATCH TAB */}
-        {activeTab === 'match' && (
-          <div className="space-y-6">
-            {!hasCV ? (
-              <div className="bg-white rounded-2xl border border-[#E2E8F0] p-12 text-center shadow-sm">
-                <Target className="w-12 h-12 text-[#E2E8F0] mx-auto mb-4" />
-                <h3 className="font-semibold text-[#0F172A] mb-2">Upload Your CV First</h3>
-                <p className="text-sm text-[#64748B] mb-4">To see how well you match this role, upload your CV.</p>
-                <Link to="/upload" className="btn-primary inline-flex items-center gap-2">
-                  <ArrowLeft size={16} /> Upload CV
-                </Link>
-              </div>
-            ) : matchData ? (
-              <>
-                {/* Match Score Header */}
+              {/* Sidebar */}
+              <div className="space-y-6">
                 <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
-                  <div className="flex flex-col lg:flex-row items-center gap-6">
-                    <MatchRing score={matchData.match_percentage || 0} size={140} />
-                    <div className="flex-1 text-center lg:text-left">
-                      <h3 className="text-lg font-bold text-[#0F172A] mb-1">
-                        {matchData.recommendation || 'Analysis Complete'}
-                      </h3>
-                      <p className="text-sm text-[#64748B] mb-3">{matchData.explanation || 'Your CV has been analyzed against this role.'}</p>
-                      <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
-                        <span className="inline-flex items-center gap-1 text-xs bg-[#F1F5F9] text-[#64748B] px-3 py-1 rounded-full">
-                          <BarChart3 size={12} /> ATS Score: {matchData.ats_score || 'N/A'}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-xs bg-[#F1F5F9] text-[#64748B] px-3 py-1 rounded-full">
-                          <Clock size={12} /> Experience: {matchData.experience_match || 'N/A'}
-                        </span>
+                  <h3 className="font-semibold text-[#0F172A] mb-4">Job Details</h3>
+                  <div className="space-y-4 text-sm">
+                    <div className="flex items-center gap-3">
+                      <Clock size={16} className="text-[#94A3B8]" />
+                      <div>
+                        <p className="text-[#94A3B8] text-xs">Posted</p>
+                        <p className="text-[#0F172A] font-medium">{job.posted_date || 'Recently'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <MapPin size={16} className="text-[#94A3B8]" />
+                      <div>
+                        <p className="text-[#94A3B8] text-xs">Location</p>
+                        <p className="text-[#0F172A] font-medium">{job.location}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <DollarSign size={16} className="text-[#94A3B8]" />
+                      <div>
+                        <p className="text-[#94A3B8] text-xs">Salary</p>
+                        <p className="text-[#0F172A] font-medium">{job.salary_range || 'Not disclosed'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Briefcase size={16} className="text-[#94A3B8]" />
+                      <div>
+                        <p className="text-[#94A3B8] text-xs">Experience</p>
+                        <p className="text-[#0F172A] font-medium">{job.experience_level || 'Not specified'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Building2 size={16} className="text-[#94A3B8]" />
+                      <div>
+                        <p className="text-[#94A3B8] text-xs">Industry</p>
+                        <p className="text-[#0F172A] font-medium">{job.industry || 'Technology'}</p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Skills Comparison */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Matched Skills */}
+                {/* Skills Tags */}
+                {job.skills && job.skills.length > 0 && (
                   <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
-                    <h4 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
-                      <CheckCircle2 size={16} className="text-emerald-500" />
-                      Matched Skills ({matchData.matched_skills?.length || 0})
-                    </h4>
+                    <h3 className="font-semibold text-[#0F172A] mb-4">Required Skills</h3>
                     <div className="flex flex-wrap gap-2">
-                      {(matchData.matched_skills || []).map((skill, i) => (
-                        <span key={i} className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg text-sm font-medium border border-emerald-100">
+                      {job.skills.map((skill, i) => (
+                        <span
+                          key={i}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${userSkills.includes(skill.toLowerCase()) ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-[#F1F5F9] text-[#64748B] border-[#E2E8F0]'}`}
+                        >
                           {skill}
+                          {userSkills.includes(skill.toLowerCase()) && <CheckCircle2 size={12} className="inline ml-1" />}
                         </span>
                       ))}
-                      {(!matchData.matched_skills || matchData.matched_skills.length === 0) && (
-                        <span className="text-sm text-[#94A3B8]">No direct skill matches found.</span>
-                      )}
                     </div>
                   </div>
-
-                  {/* Missing Skills */}
-                  <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
-                    <h4 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
-                      <XCircle size={16} className="text-red-400" />
-                      Missing Skills ({matchData.missing_skills?.length || 0})
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {(matchData.missing_skills || []).map((skill, i) => (
-                        <span key={i} className="bg-red-50 text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium border border-red-100">
-                          {skill}
-                        </span>
-                      ))}
-                      {(!matchData.missing_skills || matchData.missing_skills.length === 0) && (
-                        <span className="text-sm text-[#94A3B8]">Great! No critical missing skills.</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Detailed Analysis */}
-                <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
-                  <h4 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
-                    <BarChart3 size={16} className="text-[#2563EB]" />
-                    Detailed Analysis
-                  </h4>
-                  <div className="space-y-4">
-                    <SkillBar label="Skills Match" userHas={matchData.skills_match} required />
-                    <SkillBar label="Education" userHas={matchData.education_match} required />
-                    <SkillBar label="Experience" userHas={matchData.experience_match === 'Strong'} required />
-                    <SkillBar label="ATS Readiness" userHas={(matchData.ats_score || 0) >= 70} required />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 text-[#2563EB] animate-spin" />
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          </motion.div>
         )}
 
-        {/* AI INTELLIGENCE TAB */}
+        {/* MATCH TAB */}
+        {activeTab === 'match' && (
+          <motion.div
+            key="match"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            {!hasCV ? (
+              <div className="bg-white rounded-2xl border border-[#E2E8F0] p-12 text-center shadow-sm">
+                <AlertTriangle className="w-12 h-12 text-[#E2E8F0] mx-auto mb-4" />
+                <h3 className="font-semibold text-[#0F172A] mb-2">No CV Uploaded</h3>
+                <p className="text-sm text-[#64748B] mb-6 max-w-md mx-auto">
+                  Upload your CV to see a detailed match analysis, skill gap breakdown, and personalized recommendations.
+                </p>
+                <Link to="/upload" className="btn-primary inline-flex items-center gap-2">
+                  <ArrowLeft size={16} className="rotate-180" /> Upload CV
+                </Link>
+              </div>
+            ) : (
+              <div className="grid lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                  <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+                    <h3 className="font-semibold text-[#0F172A] mb-6 flex items-center gap-2">
+                      <Target size={18} className="text-[#2563EB]" />
+                      Match Analysis
+                    </h3>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-8 mb-8">
+                      <MatchRing score={matchScore} />
+                      <div className="flex-1 space-y-3">
+                        <h4 className="font-medium text-[#0F172A]">
+                          {matchScore >= 80 ? 'Excellent Match' : matchScore >= 60 ? 'Good Match' : 'Partial Match'}
+                        </h4>
+                        <p className="text-sm text-[#64748B]">
+                          {matchData?.analysis || 'Your profile aligns with this role based on skills, experience level, and industry fit.'}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {matchData?.key_strengths?.map((s, i) => (
+                            <span key={i} className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium border border-emerald-100">
+                              <CheckCircle2 size={12} className="inline mr-1" /> {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-[#F1F5F9] pt-6">
+                      <h4 className="font-medium text-[#0F172A] mb-4">Skill Gap Analysis</h4>
+                      <div className="space-y-3">
+                        {job.skills?.map((skill, i) => (
+                          <SkillBar
+                            key={i}
+                            label={skill}
+                            userHas={userSkills.includes(skill.toLowerCase())}
+                            required={true}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {matchData?.recommendations && (
+                    <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+                      <h3 className="font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
+                        <Sparkles size={18} className="text-[#2563EB]" />
+                        Recommendations
+                      </h3>
+                      <ul className="space-y-3">
+                        {matchData.recommendations.map((rec, i) => (
+                          <li key={i} className="flex items-start gap-3 text-sm text-[#334155] bg-[#F8FAFC] rounded-xl p-4">
+                            <div className="w-6 h-6 rounded-full bg-[#2563EB]/10 flex items-center justify-center shrink-0">
+                              <span className="text-xs font-bold text-[#2563EB]">{i + 1}</span>
+                            </div>
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-6">
+                  <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+                    <h3 className="font-semibold text-[#0F172A] mb-4">Your Profile</h3>
+                    <div className="space-y-4 text-sm">
+                      <div>
+                        <p className="text-[#94A3B8] text-xs mb-1">Skills Match</p>
+                        <div className="h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+                          <div className="h-full bg-[#2563EB] rounded-full" style={{ width: `${matchScore}%` }} />
+                        </div>
+                        <p className="text-right text-xs text-[#64748B] mt-1">{matchScore}%</p>
+                      </div>
+                      <div>
+                        <p className="text-[#94A3B8] text-xs mb-1">Experience Fit</p>
+                        <div className="h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${matchData?.experience_fit || 70}%` }} />
+                        </div>
+                        <p className="text-right text-xs text-[#64748B] mt-1">{matchData?.experience_fit || 70}%</p>
+                      </div>
+                      <div>
+                        <p className="text-[#94A3B8] text-xs mb-1">Salary Alignment</p>
+                        <div className="h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+                          <div className="h-full bg-amber-500 rounded-full" style={{ width: `${matchData?.salary_alignment || 60}%` }} />
+                        </div>
+                        <p className="text-right text-xs text-[#64748B] mt-1">{matchData?.salary_alignment || 60}%</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleUpgradeCV}
+                    className="w-full bg-gradient-to-r from-[#2563EB] to-purple-600 text-white rounded-xl p-4 font-medium shadow-lg shadow-[#2563EB]/20 hover:shadow-xl hover:shadow-[#2563EB]/30 transition-all text-sm"
+                  >
+                    <Sparkles size={16} className="inline mr-2" />
+                    Optimize CV for This Role
+                  </button>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* INTELLIGENCE TAB */}
         {activeTab === 'intelligence' && (
-          <div className="space-y-6">
-            {intelligence ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <IntelCard icon={TrendingUp} title="Hiring Expectations" color="blue">
-                  {intelligence.hiring_expectations || 'Analysis not available for this role.'}
-                </IntelCard>
-                <IntelCard icon={Target} title="Critical Success Factors" color="purple">
-                  {intelligence.critical_success_factors || 'Focus on demonstrating relevant technical skills and cultural fit.'}
-                </IntelCard>
-                <IntelCard icon={BarChart3} title="Competitiveness Analysis" color="amber">
-                  {intelligence.competitiveness || 'This role attracts strong candidates. Differentiate with project experience.'}
-                </IntelCard>
-                <IntelCard icon={TrendingUp} title="Career Growth Opportunities" color="emerald">
-                  {intelligence.career_growth || 'Strong growth trajectory in this field with clear advancement paths.'}
-                </IntelCard>
-                <IntelCard icon={Globe} title="Industry Insights" color="blue">
-                  {intelligence.industry_insights || 'The technology sector continues to show strong demand for this role.'}
-                </IntelCard>
-                <IntelCard icon={Shield} title="Strength Requirements" color="purple">
-                  {intelligence.strength_requirements || 'Technical depth, problem-solving ability, and communication skills are key.'}
-                </IntelCard>
-                <IntelCard icon={AlertTriangle} title="Role Difficulty" color="amber">
-                  {intelligence.role_difficulty || 'Moderate difficulty. Preparation with relevant projects is recommended.'}
-                </IntelCard>
-                <IntelCard icon={Award} title="Career Progression Advice" color="emerald">
-                  {intelligence.career_progression || 'Build expertise in adjacent technologies and seek mentorship opportunities.'}
-                </IntelCard>
+          <motion.div
+            key="intelligence"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            {!isPremium ? (
+              <div className="bg-white rounded-2xl border border-[#E2E8F0] p-12 text-center shadow-sm">
+                <Lock className="w-12 h-12 text-[#E2E8F0] mx-auto mb-4" />
+                <h3 className="font-semibold text-[#0F172A] mb-2">Premium Feature</h3>
+                <p className="text-sm text-[#64748B] mb-6 max-w-md mx-auto">
+                  AI Job Intelligence is available exclusively for Demo Premium users. Upgrade to unlock advanced insights.
+                </p>
+                <button
+                  onClick={() => setShowUpgradeModal(true)}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  <Sparkles size={16} /> Unlock Intelligence
+                </button>
               </div>
-            ) : (
+            ) : !intelligence ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 text-[#2563EB] animate-spin" />
               </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-6">
+                <IntelCard icon={TrendingUp} title="Market Demand" color="blue">
+                  {intelligence.market_demand || 'Demand data not available for this role.'}
+                </IntelCard>
+                <IntelCard icon={DollarSign} title="Salary Benchmark" color="emerald">
+                  {intelligence.salary_benchmark || 'Benchmark data not available.'}
+                </IntelCard>
+                <IntelCard icon={Shield} title="Competition Level" color="amber">
+                  {intelligence.competition_level || 'Competition analysis not available.'}
+                </IntelCard>
+                <IntelCard icon={Clock} title="Time to Fill" color="purple">
+                  {intelligence.time_to_fill || 'Hiring timeline data not available.'}
+                </IntelCard>
+                <IntelCard icon={Zap} title="Growth Trajectory" color="rose">
+                  {intelligence.growth_trajectory || 'Growth data not available.'}
+                </IntelCard>
+                <IntelCard icon={Award} title="Top Skills Trending" color="blue">
+                  {intelligence.trending_skills?.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {intelligence.trending_skills.map((s, i) => (
+                        <span key={i} className="px-2 py-1 bg-[#F1F5F9] rounded-lg text-xs">{s}</span>
+                      ))}
+                    </div>
+                  ) : 'Trending skills data not available.'}
+                </IntelCard>
+              </div>
             )}
-          </div>
+          </motion.div>
         )}
-      </motion.div>
+      </AnimatePresence>
 
-      {/* Premium Upgrade Modal */}
+      {/* Upgrade Modal */}
       <AnimatePresence>
         {showUpgradeModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowUpgradeModal(false)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative overflow-hidden"
+              className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl relative"
             >
-              {/* Decorative gradient */}
-              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400" />
-              
               <button
                 onClick={() => setShowUpgradeModal(false)}
                 className="absolute top-4 right-4 p-2 text-[#94A3B8] hover:text-[#0F172A] rounded-lg hover:bg-[#F1F5F9] transition-colors"

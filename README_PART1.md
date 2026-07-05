@@ -10,6 +10,7 @@ cd "C:\Users\Hp\Desktop\Perfecto\v1.0\Dikachi\backend"
 Terminal 1 – Backend (Flask API)
 
 cd backend
+py -3.11 -m venv venv
 venv\Scripts\activate
 python app.py
 
