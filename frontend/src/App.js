@@ -18,6 +18,8 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import SavedJobs from './pages/SavedJobs';
 import Settings from './pages/Settings';
+// Phase 5: AI Interview Copilot
+import InterviewCopilot from './pages/InterviewCopilot';
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token');
@@ -30,14 +32,6 @@ function PublicRoute({ children }) {
 }
 
 function App() {
-  const SkipLink = () => (
-  <a href="#main-content" className="skip-link">
-    Skip to main content
-  </a>
-);
-
-// Modify the Layout route to include id="main-content" on main:
-<main id="main-content" className="flex-1 w-full"></main>
   return (
     <ErrorBoundary>
       <AuthProvider>
@@ -60,6 +54,8 @@ function App() {
                   <Route path="skills" element={<PrivateRoute><SkillAnalytics /></PrivateRoute>} />
                   <Route path="saved-jobs" element={<PrivateRoute><SavedJobs /></PrivateRoute>} />
                   <Route path="settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+                  {/* Phase 5: AI Interview Copilot */}
+                  <Route path="interview-copilot" element={<PrivateRoute><InterviewCopilot /></PrivateRoute>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
               </Routes>

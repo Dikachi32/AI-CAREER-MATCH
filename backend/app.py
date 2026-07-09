@@ -20,6 +20,8 @@ from services.cv_optimizer import optimize_cv as cv_optimize
 from routes.ai_career_intelligence import ai_career_bp
 from services.ai_career_intelligence import generate_career_roadmap, generate_combined_intelligence
 from services.cv_optimizer import optimize_cv, quick_ats_check
+from interview_copilot import generate_interview_prep, generate_quick_interview_prep
+
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -887,6 +889,78 @@ def saved_jobs():
                 pass
 
         return jsonify({'error': 'Job not found'}), 404
+    
+@app.route('/interview_copilot', methods=['POST'])
+@jwt_required()
+def interview_copilot():
+    """
+    Generate personalized interview preparation.
+    Expects JSON with: job_title, job_description, job_company (opt),
+    job_location (opt), experience_level (opt), cv_text (opt).
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Missing request body'}), 400
+
+        job_title = data.get('job_title', '').strip()
+        job_description = data.get('job_description', '').strip()
+
+        if not job_title or not job_description:
+            return jsonify({'error': 'job_title and job_description are required'}), 400
+
+        job_company = data.get('job_company', '').strip()
+        job_location = data.get('job_location', '').strip()
+        experience_level = data.get('experience_level', '').strip()
+        cv_text = data.get('cv_text', '').strip()
+
+        # Build cv_data from cv_text if provided, else use minimal
+        cv_data = None
+        if cv_text:
+            skills = extract_skills(cv_text)
+            cv_data = {
+                'extracted_info': {
+                    'full_name': '', 'latest_job_title': '', 'current_company': '',
+                    'location': '', 'years_experience': '', 'education': '',
+                    'certifications': []
+                },
+                'extracted_skills': skills,
+                'cleaned_text': cv_text[:2000]
+            }
+        else:
+            # Try to get user's profile for enrichment
+            user_id = get_jwt_identity()
+            user = User.query.get(user_id)
+            if user:
+                cv_data = {
+                    'extracted_info': {
+                        'full_name': user.name,
+                        'latest_job_title': user.title or '',
+                        'current_company': user.company or '',
+                        'location': user.location or '',
+                        'years_experience': '', 'education': '', 'certifications': []
+                    },
+                    'extracted_skills': {'technical': [], 'soft': []},
+                    'cleaned_text': ''
+                }
+
+        result = generate_interview_prep(
+            cv_data=cv_data,
+            job_title=job_title,
+            job_description=job_description,
+            job_company=job_company,
+            job_location=job_location,
+            experience_level=experience_level
+        )
+
+        return jsonify({
+            'success': True,
+            'interview_prep': result
+        }), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Interview copilot failed: {str(e)}'}), 500
 
 # ========== MAIN ==========
 
