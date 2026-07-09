@@ -3,6 +3,13 @@ git status
 git restore .
 git clean -fd
 
+--- TO PUSH UPDATE TO GITHUB ---
+git branch
+git add .
+git commit -m # COMMENT
+
+
+git push origin careermatch-ai-upgrade-v2
 MUNACHI NZEKWU
 
 
