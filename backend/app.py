@@ -19,6 +19,7 @@ from services.ai_skill_analytics import analyze_skills
 from services.cv_optimizer import optimize_cv as cv_optimize
 from routes.ai_career_intelligence import ai_career_bp
 from services.ai_career_intelligence import generate_career_roadmap, generate_combined_intelligence
+from services.cv_optimizer import optimize_cv, quick_ats_check
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -681,6 +682,133 @@ def combined_intelligence():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': 'Failed to generate combined intelligence', 'details': str(e)}), 500
+
+@app.route('/optimize_cv', methods=['POST'])
+@jwt_required()
+def optimize_cv_endpoint():
+    """
+    POST /optimize_cv
+    
+    Phase 4: AI-powered CV Optimizer & ATS Enhancement.
+    Analyzes CV against job description and returns:
+    - ATS scores (overall, formatting, keyword match, readability, completeness)
+    - Resume match score
+    - Keyword analysis (matched/missing)
+    - Missing skills
+    - Rewritten professional summary, experience bullets, skills section
+    - Formatting suggestions
+    - Grammar fixes
+    - Recruiter feedback
+    - Action plan
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        
+        job_title = data.get('job_title', '').strip()
+        job_description = data.get('job_description', '').strip()
+        
+        if not job_title or not job_description:
+            return jsonify({'error': 'job_title and job_description are required'}), 400
+
+        # Get CV text
+        cv_text = ''
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                cv_text = cv_data.get('raw_text', '') or cv_data.get('cleaned_text', '')
+            except (json.JSONDecodeError, AttributeError):
+                cv_text = user.cv_data
+
+        if not cv_text:
+            return jsonify({'error': 'No CV found. Please upload a CV first.'}), 400
+
+        # Generate Phase 4 optimization
+        result = optimize_cv(
+            cv_text=cv_text,
+            job_title=job_title,
+            job_description=job_description
+        )
+
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'optimization': result['data'],
+                'source': result.get('source'),
+                'model': result.get('model')
+            }), 200
+        
+        return jsonify({
+            'success': False,
+            'error': 'CV optimization failed',
+            'details': result.get('data', {})
+        }), 503
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to optimize CV', 'details': str(e)}), 500
+
+
+@app.route('/quick_ats_check', methods=['POST'])
+@jwt_required()
+def quick_ats_check_endpoint():
+    """
+    POST /quick_ats_check
+    
+    Phase 4: Quick ATS compatibility check.
+    Minimal token usage for rapid feedback.
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        
+        job_title = data.get('job_title', '').strip()
+        job_description = data.get('job_description', '').strip()
+        
+        if not job_title or not job_description:
+            return jsonify({'error': 'job_title and job_description are required'}), 400
+
+        cv_text = ''
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                cv_text = cv_data.get('raw_text', '') or cv_data.get('cleaned_text', '')
+            except (json.JSONDecodeError, AttributeError):
+                cv_text = user.cv_data
+
+        if not cv_text:
+            return jsonify({'error': 'No CV found. Please upload a CV first.'}), 400
+
+        result = quick_ats_check(
+            cv_text=cv_text,
+            job_title=job_title,
+            job_description=job_description
+        )
+
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'ats_check': result['data'],
+                'source': result.get('source')
+            }), 200
+        
+        return jsonify({
+            'success': False,
+            'error': 'ATS check failed',
+            'details': result.get('error')
+        }), 503
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to check ATS compatibility', 'details': str(e)}), 500
 
 # ========== SAVED JOBS ==========
 

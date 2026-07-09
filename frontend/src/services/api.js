@@ -132,3 +132,8 @@ export const getCareerRoadmap = (payload) => api.post('/api/v3/ai-career/roadmap
 export const getCombinedIntelligence = (payload) => api.post('/api/v3/ai-career/combined', payload);
 
 export const optimizeCV = (payload) => api.post('/optimize_cv', payload);
+
+// Phase 4: AI CV Optimizer & ATS Enhancement
+export const optimizeCV = (payload) => api.post('/optimize_cv', payload);
+
+export const quickATSCheck = (payload) => api.post('/quick_ats_check', payload);

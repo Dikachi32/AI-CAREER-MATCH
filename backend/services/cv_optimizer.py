@@ -1,221 +1,448 @@
 """
-AI CV Optimization Engine
-Analyzes job requirements, compares with CV, and generates optimized content.
+AI CV Optimizer & ATS Enhancement (Phase 4)
+Professional AI-powered resume optimization system using Gemini.
+Analyzes CV against job descriptions to provide ATS scores, keyword matching,
+rewritten sections, and actionable improvement plans.
 """
 
+import json
+import logging
 import re
-from typing import Dict, List, Optional
-from dataclasses import dataclass, asdict
+from typing import Dict, List, Any, Optional
 
+from clients.gemini_client import GeminiClient, GeminiAPIError, GeminiTimeoutError, GeminiParsingError
 
-@dataclass
-class OptimizationResult:
-    optimized_summary: str
-    target_role: str
-    suggestions: List[str]
-    keyword_matches: List[str]
-    missing_keywords: List[str]
-    ats_score_before: int
-    ats_score_after: int
+logger = logging.getLogger(__name__)
 
 
 class CVOptimizerEngine:
     """
-    AI-first CV optimization engine.
-    Tailors CV content to match job requirements for ATS and human readers.
+    Phase 4: AI-powered CV Optimizer and ATS Enhancement Engine.
+    Provides comprehensive resume analysis, rewriting, and optimization.
     """
 
-    # Action verbs for professional rewriting
-    ACTION_VERBS = [
-        'Architected', 'Engineered', 'Developed', 'Designed', 'Implemented',
-        'Optimized', 'Scaled', 'Led', 'Mentored', 'Delivered', 'Streamlined',
-        'Automated', 'Refactored', 'Integrated', 'Deployed', 'Monitored'
-    ]
-
-    # ATS keywords by domain
-    ATS_KEYWORDS = {
-        'software engineer': ['agile', 'scrum', 'ci/cd', 'testing', 'api', 'microservices'],
-        'data engineer': ['etl', 'pipeline', 'warehouse', 'spark', 'hadoop', 'sql'],
-        'devops': ['infrastructure', 'automation', 'monitoring', 'cloud', 'security'],
-        'machine learning': ['model', 'training', 'inference', 'deployment', 'feature engineering'],
-        'frontend': ['responsive', 'accessibility', 'performance', 'state management', 'component'],
+    # Schema for structured ATS optimization response
+    ATS_OPTIMIZATION_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "atsScore": {
+                "type": "object",
+                "properties": {
+                    "overall": {"type": "number", "minimum": 0, "maximum": 100},
+                    "formatting": {"type": "number", "minimum": 0, "maximum": 100},
+                    "keywordMatch": {"type": "number", "minimum": 0, "maximum": 100},
+                    "readability": {"type": "number", "minimum": 0, "maximum": 100},
+                    "completeness": {"type": "number", "minimum": 0, "maximum": 100}
+                },
+                "required": ["overall", "formatting", "keywordMatch", "readability", "completeness"]
+            },
+            "resumeMatchScore": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "How well the resume matches the specific job"
+            },
+            "keywordAnalysis": {
+                "type": "object",
+                "properties": {
+                    "matchedKeywords": {"type": "array", "items": {"type": "string"}},
+                    "missingKeywords": {"type": "array", "items": {"type": "string"}},
+                    "keywordDensity": {"type": "string"},
+                    "suggestions": {"type": "array", "items": {"type": "string"}}
+                },
+                "required": ["matchedKeywords", "missingKeywords"]
+            },
+            "missingSkills": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "skill": {"type": "string"},
+                        "importance": {"type": "string", "enum": ["Critical", "High", "Medium", "Low"]},
+                        "context": {"type": "string"}
+                    },
+                    "required": ["skill", "importance"]
+                }
+            },
+            "strengths": {
+                "type": "array",
+                "items": {"type": "string"}
+            },
+            "weaknesses": {
+                "type": "array",
+                "items": {"type": "string"}
+            },
+            "improvedProfessionalSummary": {
+                "type": "object",
+                "properties": {
+                    "original": {"type": "string"},
+                    "improved": {"type": "string"},
+                    "changes": {"type": "array", "items": {"type": "string"}},
+                    "whyBetter": {"type": "string"}
+                },
+                "required": ["original", "improved", "whyBetter"]
+            },
+            "improvedExperience": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "company": {"type": "string"},
+                        "role": {"type": "string"},
+                        "originalBullets": {"type": "array", "items": {"type": "string"}},
+                        "improvedBullets": {"type": "array", "items": {"type": "string"}},
+                        "improvements": {"type": "array", "items": {"type": "string"}}
+                    },
+                    "required": ["company", "role", "originalBullets", "improvedBullets"]
+                }
+            },
+            "improvedSkillsSection": {
+                "type": "object",
+                "properties": {
+                    "original": {"type": "array", "items": {"type": "string"}},
+                    "improved": {"type": "array", "items": {"type": "string"}},
+                    "added": {"type": "array", "items": {"type": "string"}},
+                    "removed": {"type": "array", "items": {"type": "string"}},
+                    "rationale": {"type": "string"}
+                },
+                "required": ["original", "improved"]
+            },
+            "bulletPointImprovements": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "original": {"type": "string"},
+                        "improved": {"type": "string"},
+                        "reason": {"type": "string"}
+                    },
+                    "required": ["original", "improved", "reason"]
+                }
+            },
+            "formattingSuggestions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "issue": {"type": "string"},
+                        "severity": {"type": "string", "enum": ["Critical", "High", "Medium", "Low"]},
+                        "fix": {"type": "string"},
+                        "example": {"type": "string"}
+                    },
+                    "required": ["issue", "severity", "fix"]
+                }
+            },
+            "grammarWriting": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "original": {"type": "string"},
+                        "issue": {"type": "string"},
+                        "correction": {"type": "string"},
+                        "explanation": {"type": "string"}
+                    },
+                    "required": ["original", "issue", "correction"]
+                }
+            },
+            "recruiterFeedback": {
+                "type": "object",
+                "properties": {
+                    "firstImpression": {"type": "string"},
+                    "timeToRead": {"type": "string"},
+                    "standoutElements": {"type": "array", "items": {"type": "string"}},
+                    "redFlags": {"type": "array", "items": {"type": "string"}},
+                    "overallVerdict": {"type": "string"}
+                },
+                "required": ["firstImpression", "overallVerdict"]
+            },
+            "actionPlan": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "step": {"type": "number"},
+                        "action": {"type": "string"},
+                        "priority": {"type": "string", "enum": ["Critical", "High", "Medium", "Low"]},
+                        "timeEstimate": {"type": "string"},
+                        "impact": {"type": "string"}
+                    },
+                    "required": ["step", "action", "priority", "impact"]
+                }
+            }
+        },
+        "required": [
+            "atsScore", "resumeMatchScore", "keywordAnalysis", "missingSkills",
+            "strengths", "weaknesses", "improvedProfessionalSummary",
+            "improvedExperience", "improvedSkillsSection", "formattingSuggestions",
+            "recruiterFeedback", "actionPlan"
+        ]
     }
 
-    def optimize(self, cv_text: str, job_title: str, job_description: str) -> Dict:
+    SYSTEM_INSTRUCTION = """You are an elite ATS Resume Optimization Expert and Senior Technical Recruiter with 15+ years of experience at Fortune 500 companies. You specialize in:
+
+1. ATS SYSTEMS: You understand how Applicant Tracking Systems (ATS) parse, score, and rank resumes. You know exactly what formatting kills ATS readability and what structures maximize parse success.
+
+2. KEYWORD OPTIMIZATION: You identify critical job-specific keywords and ensure they appear naturally in the resume. You understand semantic matching vs exact matching.
+
+3. IMPACT-FOCUSED WRITING: You transform passive, responsibility-focused bullet points into active, achievement-focused statements with quantifiable metrics.
+
+4. RECRUITER PSYCHOLOGY: You know recruiters spend 6-10 seconds on first scan. You optimize for scanability, visual hierarchy, and instant comprehension.
+
+5. INDUSTRY STANDARDS: You follow current resume best practices for tech roles including proper section ordering, optimal length, and modern formatting conventions.
+
+Your analysis is honest, specific, and actionable. You don't sugarcoat weaknesses but you provide clear paths to improvement."""
+
+    def __init__(self, gemini_client: Optional[GeminiClient] = None):
+        self.client = gemini_client or GeminiClient()
+
+    def _build_optimization_prompt(self, cv_text: str, job_title: str, job_description: str) -> str:
+        """Construct the comprehensive ATS optimization prompt."""
+
+        prompt = f"""Analyze and optimize the following CV for the target job. Provide a complete ATS optimization report with rewritten sections.
+
+=== CANDIDATE CV ===
+{cv_text[:8000]}
+
+=== TARGET JOB ===
+Title: {job_title}
+
+Job Description:
+{job_description[:6000]}
+
+=== OPTIMIZATION INSTRUCTIONS ===
+
+1. ATS SCORE: Evaluate the resume on 5 dimensions (each 0-100):
+   - Overall: General ATS compatibility
+   - Formatting: Structure, headers, parseability
+   - Keyword Match: How well keywords align with job description
+   - Readability: Clarity, scanability for recruiters
+   - Completeness: All expected sections present and detailed
+
+2. RESUME MATCH SCORE: 0-100 score specifically for this job
+
+3. KEYWORD ANALYSIS: List matched and missing keywords from job description
+
+4. MISSING SKILLS: Identify critical skills from job description not in CV
+
+5. STRENGTHS & WEAKNESSES: Honest assessment
+
+6. REWRITE SECTIONS:
+   - Professional Summary: Rewrite to be more impactful, keyword-rich, and tailored
+   - Experience Bullets: Transform passive language to active, metric-driven achievements
+   - Skills Section: Reorganize, add missing critical skills, remove irrelevant ones
+
+7. FORMATTING SUGGESTIONS: Specific ATS and recruiter-friendly formatting fixes
+
+8. GRAMMAR & WRITING: Identify and correct specific issues
+
+9. RECRUITER FEEDBACK: Simulate a recruiter's 10-second scan impression
+
+10. ACTION PLAN: Prioritized steps to implement improvements
+
+CRITICAL RULES:
+- Preserve all factual information and achievements
+- Never invent metrics or experiences the candidate didn't have
+- Make passive voice active ("Responsible for" → "Led", "Managed" → "Drove")
+- Add quantifiable impact where possible (%, $, time saved)
+- Ensure every rewritten bullet starts with a strong action verb
+- Keep rewritten sections roughly the same length or slightly shorter
+- Tailor content specifically to the target job
+
+Respond with valid JSON ONLY. No markdown, no explanations outside JSON."""
+
+        return prompt
+
+    def optimize_cv(self, cv_text: str, job_title: str, job_description: str) -> Dict[str, Any]:
         """
-        Generate optimized CV content tailored to a specific job.
+        Phase 4: Generate comprehensive AI-powered CV optimization.
+        Returns ATS scores, rewritten sections, and actionable improvements.
         """
-        job_lower = f"{job_title} {job_description}".lower()
-        cv_lower = cv_text.lower()
 
-        # Extract job keywords
-        job_keywords = self._extract_keywords(job_lower)
+        prompt = self._build_optimization_prompt(cv_text, job_title, job_description)
 
-        # Extract CV keywords
-        cv_keywords = self._extract_keywords(cv_lower)
+        try:
+            result = self.client.generate_structured(
+                prompt=prompt,
+                schema=self.ATS_OPTIMIZATION_SCHEMA,
+                temperature=0.15,
+                max_output_tokens=4096,
+                system_instruction=self.SYSTEM_INSTRUCTION
+            )
 
-        # Find matches and gaps
-        matched = [k for k in job_keywords if k in cv_keywords]
-        missing = [k for k in job_keywords if k not in cv_keywords]
+            if result.get("success") and result.get("parsed_as_json"):
+                optimization_data = result["data"]
 
-        # Calculate ATS scores
-        ats_before = self._calculate_ats_score(cv_keywords, job_keywords)
-        ats_after = min(98, ats_before + len(missing) * 5 + 10)
+                # Validate required keys
+                required_keys = [
+                    "atsScore", "resumeMatchScore", "keywordAnalysis", "missingSkills",
+                    "strengths", "weaknesses", "improvedProfessionalSummary",
+                    "improvedExperience", "improvedSkillsSection", "formattingSuggestions",
+                    "recruiterFeedback", "actionPlan"
+                ]
 
-        # Generate optimized summary
-        optimized = self._generate_summary(cv_text, job_title, matched, missing)
+                for key in required_keys:
+                    if key not in optimization_data:
+                        optimization_data[key] = self._get_fallback_section(key)
 
-        # Generate suggestions
-        suggestions = self._generate_suggestions(missing, job_title, cv_text)
+                return {
+                    "success": True,
+                    "data": optimization_data,
+                    "source": "gemini_ai_optimizer",
+                    "model": result.get("model", "unknown"),
+                    "cached": False,
+                    "phase": 4
+                }
 
-        return asdict(OptimizationResult(
-            optimized_summary=optimized,
-            target_role=job_title,
-            suggestions=suggestions,
-            keyword_matches=matched,
-            missing_keywords=missing,
-            ats_score_before=ats_before,
-            ats_score_after=ats_after
-        ))
+            return self._handle_unstructured_response(result)
 
-    def _extract_keywords(self, text: str) -> List[str]:
-        """Extract relevant keywords from text."""
-        # Technical keywords - using a simple word list instead of broken regex
-        tech_keywords = [
-            'python', 'javascript', 'typescript', 'java', 'go', 'golang', 'rust', 'c++', 'c#',
-            'ruby', 'php', 'swift', 'kotlin', 'scala', 'r', 'matlab', 'perl', 'shell', 'bash',
-            'react', 'reactjs', 'angular', 'vue', 'vuejs', 'svelte', 'nextjs', 'nuxtjs', 'gatsby',
-            'node', 'nodejs', 'express', 'django', 'flask', 'fastapi', 'spring', 'laravel', 'rails',
-            'aws', 'gcp', 'azure', 'docker', 'kubernetes', 'k8s', 'terraform', 'ansible', 'jenkins',
-            'github', 'gitlab', 'bitbucket', 'git', 'ci/cd', 'cicd', 'devops', 'mlops',
-            'sql', 'mysql', 'postgresql', 'postgres', 'mongodb', 'redis', 'elasticsearch', 'dynamodb',
-            'nosql', 'graphql', 'rest', 'api', 'microservices', 'serverless', 'lambda',
-            'tensorflow', 'pytorch', 'keras', 'scikit-learn', 'pandas', 'numpy', 'matplotlib',
-            'machine learning', 'deep learning', 'nlp', 'computer vision', 'ai', 'data science',
-            'agile', 'scrum', 'kanban', 'jira', 'confluence', 'figma', 'sketch', 'tableau',
-            'powerbi', 'excel', 'word', 'powerpoint', 'photoshop', 'illustrator', 'xd',
-            'html', 'css', 'sass', 'less', 'tailwind', 'bootstrap', 'material-ui',
-            'webpack', 'vite', 'rollup', 'babel', 'eslint', 'prettier', 'jest', 'cypress',
-            'selenium', 'junit', 'pytest', 'mocha', 'chai', 'cucumber', 'gatling',
-            'kafka', 'rabbitmq', 'sqs', 'sns', 'event-driven', 'streaming',
-            'oauth', 'jwt', 'sso', 'ldap', 'active directory', 'iam',
-            'prometheus', 'grafana', 'datadog', 'new relic', 'splunk', 'elk',
-            'hadoop', 'spark', 'hive', 'airflow', 'dbt', 'snowflake', 'bigquery',
-            'linux', 'ubuntu', 'centos', 'debian', 'redhat', 'windows', 'macos',
-            'nginx', 'apache', 'tomcat', 'iis', 'cdn', 'cloudfront', 'cloudflare'
-        ]
-        
-        text_lower = text.lower()
-        matches = []
-        for keyword in tech_keywords:
-            # Use word boundaries for single words, substring for multi-word
-            if ' ' in keyword:
-                if keyword in text_lower:
-                    matches.append(keyword)
-            else:
-                # Check as whole word
-                pattern = r'\b' + re.escape(keyword) + r'\b'
-                if re.search(pattern, text_lower):
-                    matches.append(keyword)
-        
-        return list(set(matches))[:20]
+        except (GeminiAPIError, GeminiTimeoutError, GeminiParsingError) as e:
+            logger.error(f"Gemini API error in CV optimization: {str(e)}")
+            return self._get_degraded_response(str(e))
+        except Exception as e:
+            logger.exception("Unexpected error in CV optimization")
+            return self._get_degraded_response(str(e))
 
-    def _calculate_ats_score(self, cv_keywords: List[str], job_keywords: List[str]) -> int:
-        """Calculate ATS compatibility score."""
-        if not job_keywords:
-            return 50
-        matches = len(set(cv_keywords) & set(job_keywords))
-        return min(98, int((matches / len(job_keywords)) * 100))
+    def quick_ats_check(self, cv_text: str, job_title: str, job_description: str) -> Dict[str, Any]:
+        """Quick ATS compatibility check with minimal token usage."""
 
-    def _generate_summary(self, cv_text: str, job_title: str, matched: List[str], missing: List[str]) -> str:
-        """Generate AI-optimized professional summary."""
-        # Extract years of experience
-        years_match = re.search(r'(\d+)\+?\s*years?', cv_text.lower())
-        years = years_match.group(1) if years_match else 'several'
+        prompt = f"""Quick ATS check. Respond with JSON only.
 
-        # Extract current role using simple keyword matching
-        role_keywords = [
-            'software engineer', 'senior software engineer', 'lead software engineer',
-            'full stack developer', 'backend developer', 'frontend developer',
-            'devops engineer', 'data engineer', 'data scientist', 'machine learning engineer',
-            'cloud engineer', 'site reliability engineer', 'mobile developer',
-            'web developer', 'security engineer', 'network engineer', 'systems engineer',
-            'database administrator', 'platform engineer', 'infrastructure engineer',
-            'solutions architect', 'technical lead', 'engineering manager',
-            'product manager', 'project manager', 'program manager', 'qa engineer',
-            'test engineer', 'automation engineer', 'performance engineer',
-            'data analyst', 'business analyst', 'business intelligence analyst',
-            'research scientist', 'research engineer', 'applied scientist',
-            'ai engineer', 'ml engineer', 'nlp engineer', 'computer vision engineer',
-            'robotics engineer', 'blockchain developer', 'game developer',
-            'embedded systems engineer', 'firmware engineer', 'hardware engineer',
-            'ui engineer', 'ux engineer', 'frontend engineer', 'backend engineer',
-            'site engineer', 'support engineer', 'sales engineer', 'pre-sales engineer',
-            'consultant', 'freelancer', 'contractor', 'intern', 'trainee',
-            'graduate engineer', 'junior engineer', 'associate engineer',
-            'staff engineer', 'principal engineer', 'distinguished engineer',
-            'fellow engineer', 'cto', 'cio', 'vp engineering', 'head of engineering',
-            'director of engineering', 'chief architect', 'enterprise architect'
-        ]
-        
-        current_role = 'Professional'
-        cv_lower = cv_text.lower()
-        for role in role_keywords:
-            if role in cv_lower:
-                current_role = role.title()
-                break
+CV: {cv_text[:2000]}
+Job: {job_title}
+Description: {job_description[:1500]}
 
-        # Build optimized summary
-        summary_parts = [
-            f"Results-driven {current_role} with {years}+ years of experience",
-        ]
+Return JSON:
+- atsScore (object: overall, formatting, keywordMatch, readability, completeness)
+- topIssue (string)
+- quickFix (string)
+- matchScore (number 0-100)"""
 
-        if matched:
-            skill_str = ', '.join(matched[:5])
-            summary_parts.append(f"Skilled in {skill_str}")
+        try:
+            result = self.client.generate_structured(
+                prompt=prompt,
+                temperature=0.1,
+                max_output_tokens=1024
+            )
 
-        if missing:
-            gap_str = ', '.join(missing[:3])
-            summary_parts.append(f"Currently expanding expertise in {gap_str}")
+            if result.get("success") and result.get("parsed_as_json"):
+                return {
+                    "success": True,
+                    "data": result["data"],
+                    "source": "gemini_ai_quick_ats"
+                }
 
-        summary_parts.append(f"Seeking to leverage technical depth and leadership in a {job_title} role")
+            return {
+                "success": False,
+                "data": {"atsScore": {"overall": 0}, "matchScore": 0},
+                "error": "Failed to parse quick ATS check"
+            }
 
-        return '. '.join(summary_parts) + '.'
+        except Exception as e:
+            logger.error(f"Quick ATS check failed: {str(e)}")
+            return {
+                "success": False,
+                "data": {"atsScore": {"overall": 0}, "matchScore": 0},
+                "error": str(e)
+            }
 
-    def _generate_suggestions(self, missing: List[str], job_title: str, cv_text: str) -> List[str]:
-        """Generate actionable improvement suggestions."""
-        suggestions = [
-            f"Highlight relevant experience with {job_title} technologies",
-            "Quantify achievements with metrics and percentages",
-            "Include keywords from the job description throughout your CV",
-            "Structure your CV for ATS compatibility with clear headings"
-        ]
+    def _handle_unstructured_response(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle non-JSON responses."""
+        raw_text = result.get("raw_text", "")
+        logger.warning(f"Unstructured CV optimization response. Length: {len(raw_text)}")
 
-        if missing:
-            suggestions.append(f"Add experience with: {', '.join(missing[:5])}")
+        return {
+            "success": True,
+            "data": {
+                "atsScore": {"overall": 0, "formatting": 0, "keywordMatch": 0, "readability": 0, "completeness": 0},
+                "resumeMatchScore": 0,
+                "keywordAnalysis": {"matchedKeywords": [], "missingKeywords": [], "suggestions": []},
+                "missingSkills": [],
+                "strengths": [],
+                "weaknesses": ["Unable to parse structured analysis"],
+                "improvedProfessionalSummary": {"original": "", "improved": "", "changes": [], "whyBetter": "Analysis unavailable"},
+                "improvedExperience": [],
+                "improvedSkillsSection": {"original": [], "improved": [], "added": [], "removed": [], "rationale": "Analysis unavailable"},
+                "bulletPointImprovements": [],
+                "formattingSuggestions": [],
+                "grammarWriting": [],
+                "recruiterFeedback": {"firstImpression": "Analysis unavailable", "overallVerdict": "Unable to assess"},
+                "actionPlan": [],
+                "rawAnalysis": raw_text,
+                "parseError": True
+            },
+            "source": "gemini_ai_optimizer_fallback",
+            "model": result.get("model", "unknown"),
+            "cached": False,
+            "phase": 4
+        }
 
-        # Check for metrics
-        if not re.search(r'\d+%|\d+x|\$\d+|\d+\s*(?:users|customers|clients|requests|transactions)', cv_text):
-            suggestions.append("Add measurable impact: e.g., 'Improved performance by 40%'")
+    def _get_degraded_response(self, error_message: str) -> Dict[str, Any]:
+        """Graceful degradation."""
+        return {
+            "success": False,
+            "data": {
+                "atsScore": {"overall": 0, "formatting": 0, "keywordMatch": 0, "readability": 0, "completeness": 0},
+                "resumeMatchScore": 0,
+                "keywordAnalysis": {"matchedKeywords": [], "missingKeywords": [], "suggestions": []},
+                "missingSkills": [],
+                "strengths": [],
+                "weaknesses": ["AI optimization service temporarily unavailable"],
+                "improvedProfessionalSummary": {"original": "", "improved": "", "changes": [], "whyBetter": "Service unavailable"},
+                "improvedExperience": [],
+                "improvedSkillsSection": {"original": [], "improved": [], "added": [], "removed": [], "rationale": "Service unavailable"},
+                "formattingSuggestions": [{"issue": "Service unavailable", "severity": "High", "fix": "Retry optimization"}],
+                "recruiterFeedback": {"firstImpression": "Service unavailable", "overallVerdict": "Unable to assess"},
+                "actionPlan": [{"step": 1, "action": "Retry AI optimization", "priority": "High", "timeEstimate": "1 minute", "impact": "Restore full optimization"}],
+                "error": error_message,
+                "serviceAvailable": False
+            },
+            "source": "degraded_optimizer_fallback",
+            "model": "none",
+            "cached": False,
+            "phase": 4
+        }
 
-        # Check for leadership
-        if 'lead' not in cv_text.lower() and 'mentor' not in cv_text.lower():
-            suggestions.append("Emphasize leadership and mentorship experience")
-
-        return suggestions[:6]
-
-
-# Singleton
-_engine = None
-
-
-def get_optimizer():
-    global _engine
-    if _engine is None:
-        _engine = CVOptimizerEngine()
-    return _engine
+    def _get_fallback_section(self, section_name: str) -> Any:
+        """Return empty fallback section."""
+        fallbacks = {
+            "atsScore": {"overall": 0, "formatting": 0, "keywordMatch": 0, "readability": 0, "completeness": 0},
+            "resumeMatchScore": 0,
+            "keywordAnalysis": {"matchedKeywords": [], "missingKeywords": [], "keywordDensity": "Unknown", "suggestions": []},
+            "missingSkills": [],
+            "strengths": [],
+            "weaknesses": ["Section data unavailable"],
+            "improvedProfessionalSummary": {"original": "", "improved": "", "changes": [], "whyBetter": "Data unavailable"},
+            "improvedExperience": [],
+            "improvedSkillsSection": {"original": [], "improved": [], "added": [], "removed": [], "rationale": "Data unavailable"},
+            "bulletPointImprovements": [],
+            "formattingSuggestions": [],
+            "grammarWriting": [],
+            "recruiterFeedback": {"firstImpression": "Data unavailable", "timeToRead": "Unknown", "standoutElements": [], "redFlags": [], "overallVerdict": "Unable to assess"},
+            "actionPlan": []
+        }
+        return fallbacks.get(section_name, [] if "Skills" in section_name or "Experience" in section_name or "Suggestions" in section_name or "Plan" in section_name else {})
 
 
-def optimize_cv(cv_text: str, job_title: str, job_description: str) -> Dict:
-    engine = get_optimizer()
-    return engine.optimize(cv_text, job_title, job_description)
+# Singleton instance
+_cv_optimizer_engine: Optional[CVOptimizerEngine] = None
+
+
+def get_cv_optimizer_engine() -> CVOptimizerEngine:
+    """Get or create the singleton CV optimizer engine."""
+    global _cv_optimizer_engine
+    if _cv_optimizer_engine is None:
+        _cv_optimizer_engine = CVOptimizerEngine()
+    return _cv_optimizer_engine
+
+
+def optimize_cv(cv_text: str, job_title: str, job_description: str) -> Dict[str, Any]:
+    """Convenience function for full CV optimization."""
+    engine = get_cv_optimizer_engine()
+    return engine.optimize_cv(cv_text, job_title, job_description)
+
+
+def quick_ats_check(cv_text: str, job_title: str, job_description: str) -> Dict[str, Any]:
+    """Convenience function for quick ATS check."""
+    engine = get_cv_optimizer_engine()
+    return engine.quick_ats_check(cv_text, job_title, job_description)
