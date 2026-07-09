@@ -21,7 +21,7 @@ from routes.ai_career_intelligence import ai_career_bp
 from services.ai_career_intelligence import generate_career_roadmap, generate_combined_intelligence
 from services.cv_optimizer import optimize_cv, quick_ats_check
 from interview_copilot import generate_interview_prep, generate_quick_interview_prep
-
+from career_coach import generate_career_dashboard, generate_quick_career_dashboard
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -961,6 +961,84 @@ def interview_copilot():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': f'Interview copilot failed: {str(e)}'}), 500
+
+
+@app.route('/career_dashboard', methods=['POST'])
+@jwt_required()
+def career_dashboard():
+    """
+    Generate personalized career dashboard analysis.
+    Expects JSON with optional: cv_text, job_match_score, top_matched_role,
+    skills_gap, market_demand, analytics_summary.
+    """
+    try:
+        data = request.get_json() or {}
+
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        cv_text = data.get('cv_text', '').strip()
+
+        # Build cv_data
+        cv_data = None
+        if cv_text:
+            skills = extract_skills(cv_text)
+            cv_data = {
+                'extracted_info': {
+                    'full_name': user.name,
+                    'latest_job_title': user.title or '',
+                    'current_company': user.company or '',
+                    'location': user.location or '',
+                    'years_experience': '',
+                    'education': '',
+                    'certifications': []
+                },
+                'extracted_skills': skills,
+                'cleaned_text': cv_text[:2000]
+            }
+        else:
+            # Use user profile only
+            cv_data = {
+                'extracted_info': {
+                    'full_name': user.name,
+                    'latest_job_title': user.title or '',
+                    'current_company': user.company or '',
+                    'location': user.location or '',
+                    'years_experience': '',
+                    'education': '',
+                    'certifications': []
+                },
+                'extracted_skills': {'technical': [], 'soft': []},
+                'cleaned_text': ''
+            }
+
+        user_profile = {
+            'name': user.name,
+            'title': user.title,
+            'company': user.company,
+            'location': user.location
+        }
+
+        result = generate_career_dashboard(
+            cv_data=cv_data,
+            user_profile=user_profile,
+            job_match_score=data.get('job_match_score', 0),
+            top_matched_role=data.get('top_matched_role', ''),
+            skills_gap=data.get('skills_gap', ''),
+            market_demand=data.get('market_demand', ''),
+            analytics_summary=data.get('analytics_summary', '')
+        )
+
+        return jsonify({
+            'success': True,
+            'career_dashboard': result
+        }), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': f'Career dashboard failed: {str(e)}'}), 500
 
 # ========== MAIN ==========
 

@@ -119,3 +119,6 @@ export const quickATSCheck = (payload) => api.post('/quick_ats_check', payload);
 
 // Phase 5: AI Interview Copilot
 export const getInterviewCopilot = (payload) => api.post('/interview_copilot', payload);
+
+// Phase 6: AI Career Coach Dashboard
+export const getCareerDashboard = (payload) => api.post('/career_dashboard', payload);

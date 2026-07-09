@@ -20,6 +20,9 @@ import SavedJobs from './pages/SavedJobs';
 import Settings from './pages/Settings';
 // Phase 5: AI Interview Copilot
 import InterviewCopilot from './pages/InterviewCopilot';
+// Phase 6: AI Career Coach Dashboard
+import CareerDashboard from './pages/CareerDashboard';
+
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token');
@@ -56,6 +59,8 @@ function App() {
                   <Route path="settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
                   {/* Phase 5: AI Interview Copilot */}
                   <Route path="interview-copilot" element={<PrivateRoute><InterviewCopilot /></PrivateRoute>} />
+                  {/* Phase 6: AI Career Coach Dashboard */}
+                  <Route path="career-dashboard" element={<PrivateRoute><CareerDashboard /></PrivateRoute>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
               </Routes>
