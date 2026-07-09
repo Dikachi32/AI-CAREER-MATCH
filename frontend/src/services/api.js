@@ -126,4 +126,9 @@ export const getCVMatch = (payload) => api.post('/cv_match', payload);
 
 export const getJobIntelligence = (payload) => api.post('/job_intelligence', payload);
 
+// Phase 3: AI Career Roadmap & Skill Gap Intelligence
+export const getCareerRoadmap = (payload) => api.post('/api/v3/ai-career/roadmap', payload);
+
+export const getCombinedIntelligence = (payload) => api.post('/api/v3/ai-career/combined', payload);
+
 export const optimizeCV = (payload) => api.post('/optimize_cv', payload);

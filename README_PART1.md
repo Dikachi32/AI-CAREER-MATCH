@@ -32,3 +32,12 @@ npm start
 
 
 
+==================================================
+GIT UPDATE
+==================================================
+
+git add .
+
+git commit -m "Phase 3 - AI Career Roadmap"
+
+git push origin careermatch-ai-upgrade-v2

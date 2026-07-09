@@ -18,6 +18,7 @@ from services.ai_job_intelligence import analyze_job_intelligence, match_cv_to_j
 from services.ai_skill_analytics import analyze_skills
 from services.cv_optimizer import optimize_cv as cv_optimize
 from routes.ai_career_intelligence import ai_career_bp
+from services.ai_career_intelligence import generate_career_roadmap, generate_combined_intelligence
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -531,6 +532,155 @@ def optimize_cv():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': 'Failed to optimize CV', 'details': str(e)}), 500
+
+@app.route('/api/v3/ai-career/roadmap', methods=['POST'])
+@jwt_required()
+def career_roadmap():
+    """
+    POST /api/v3/ai-career/roadmap
+    
+    Phase 3: Generate personalized career roadmap and skill gap analysis.
+    Includes learning timeline, certifications, portfolio projects, next role, salary projection.
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        
+        job_title = data.get('job_title', '').strip()
+        job_description = data.get('job_description', '').strip()
+        
+        if not job_title or not job_description:
+            return jsonify({'error': 'job_title and job_description are required'}), 400
+
+        # Get CV text and AI profile
+        cv_text = ''
+        user_skills = []
+        ai_profile = None
+        
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                cv_text = cv_data.get('raw_text', '') or cv_data.get('cleaned_text', '')
+                user_skills = cv_data.get('extracted_skills', [])
+            except (json.JSONDecodeError, AttributeError):
+                cv_text = user.cv_data
+
+        # Get AI profile if available
+        try:
+            ai_profile = AIProfile.query.filter_by(user_id=user.id).first()
+        except:
+            ai_profile = None
+
+        if not cv_text:
+            return jsonify({'error': 'No CV found. Please upload a CV first.'}), 400
+
+        # Generate Phase 3 roadmap
+        result = generate_career_roadmap(
+            cv_text=cv_text,
+            job_title=job_title,
+            job_description=job_description,
+            company_name=data.get('company_name'),
+            industry=data.get('industry'),
+            ai_profile=ai_profile,
+            user_skills=user_skills
+        )
+
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'roadmap': result['data'],
+                'source': result.get('source'),
+                'model': result.get('model')
+            }), 200
+        
+        return jsonify({
+            'success': False,
+            'error': 'Roadmap generation failed',
+            'details': result.get('data', {})
+        }), 503
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to generate career roadmap', 'details': str(e)}), 500
+
+
+@app.route('/api/v3/ai-career/combined', methods=['POST'])
+@jwt_required()
+def combined_intelligence():
+    """
+    POST /api/v3/ai-career/combined
+    
+    Phase 3: Generate both intelligence analysis AND career roadmap in one call.
+    Optimized for the JobDetails page to reduce API calls.
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        
+        job_title = data.get('job_title', '').strip()
+        job_description = data.get('job_description', '').strip()
+        
+        if not job_title or not job_description:
+            return jsonify({'error': 'job_title and job_description are required'}), 400
+
+        # Get CV text and AI profile
+        cv_text = ''
+        user_skills = []
+        ai_profile = None
+        
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                cv_text = cv_data.get('raw_text', '') or cv_data.get('cleaned_text', '')
+                user_skills = cv_data.get('extracted_skills', [])
+            except (json.JSONDecodeError, AttributeError):
+                cv_text = user.cv_data
+
+        try:
+            ai_profile = AIProfile.query.filter_by(user_id=user.id).first()
+        except:
+            ai_profile = None
+
+        if not cv_text:
+            return jsonify({'error': 'No CV found. Please upload a CV first.'}), 400
+
+        # Generate combined intelligence + roadmap
+        result = generate_combined_intelligence(
+            cv_text=cv_text,
+            job_title=job_title,
+            job_description=job_description,
+            company_name=data.get('company_name'),
+            industry=data.get('industry'),
+            ai_profile=ai_profile,
+            user_skills=user_skills
+        )
+
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'intelligence': result['data']['intelligence'],
+                'roadmap': result['data']['roadmap'],
+                'source': result.get('source'),
+                'model': result.get('model')
+            }), 200
+        
+        return jsonify({
+            'success': False,
+            'error': 'Combined intelligence generation failed',
+            'details': result.get('data', {})
+        }), 503
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to generate combined intelligence', 'details': str(e)}), 500
 
 # ========== SAVED JOBS ==========
 

@@ -11,7 +11,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useCV } from '../context/CVContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { getCVMatch, getJobIntelligence } from '../services/api';
+import { getCVMatch, getCombinedIntelligence } from '../services/api';
 import SkeletonLoader from '../components/SkeletonLoader';
 
 
@@ -135,10 +135,10 @@ export default function JobDetails() {
     if (!job) return;
     const loadIntel = async () => {
       try {
-        const res = await getJobIntelligence({
+        const res = await getCombinedIntelligence({
           job_title: job.title,
           job_description: job.description,
-          company: job.company,
+          company_name: job.company,
           industry: job.industry
         });
         setIntelligence(res.data);
@@ -544,7 +544,7 @@ export default function JobDetails() {
           </motion.div>
         )}
 
-        {/* INTELLIGENCE TAB */}
+        {/* AI INTELLIGENCE + CAREER ROADMAP TAB (Phase 3) */}
         {activeTab === 'intelligence' && (
           <motion.div
             key="intelligence"
@@ -558,7 +558,7 @@ export default function JobDetails() {
                 <Lock className="w-12 h-12 text-[#E2E8F0] mx-auto mb-4" />
                 <h3 className="font-semibold text-[#0F172A] mb-2">Premium Feature</h3>
                 <p className="text-sm text-[#64748B] mb-6 max-w-md mx-auto">
-                  AI Job Intelligence is available exclusively for Demo Premium users. Upgrade to unlock advanced insights.
+                  AI Career Intelligence and Roadmap is available exclusively for Demo Premium users. Upgrade to unlock personalized skill gap analysis, learning roadmaps, and career planning.
                 </p>
                 <button
                   onClick={() => setShowUpgradeModal(true)}
@@ -572,31 +572,226 @@ export default function JobDetails() {
                 <Loader2 className="w-8 h-8 text-[#2563EB] animate-spin" />
               </div>
             ) : (
-              <div className="grid md:grid-cols-2 gap-6">
-                <IntelCard icon={TrendingUp} title="Market Demand" color="blue">
-                  {intelligence.market_demand || 'Demand data not available for this role.'}
-                </IntelCard>
-                <IntelCard icon={DollarSign} title="Salary Benchmark" color="emerald">
-                  {intelligence.salary_benchmark || 'Benchmark data not available.'}
-                </IntelCard>
-                <IntelCard icon={Shield} title="Competition Level" color="amber">
-                  {intelligence.competition_level || 'Competition analysis not available.'}
-                </IntelCard>
-                <IntelCard icon={Clock} title="Time to Fill" color="purple">
-                  {intelligence.time_to_fill || 'Hiring timeline data not available.'}
-                </IntelCard>
-                <IntelCard icon={Zap} title="Growth Trajectory" color="rose">
-                  {intelligence.growth_trajectory || 'Growth data not available.'}
-                </IntelCard>
-                <IntelCard icon={Award} title="Top Skills Trending" color="blue">
-                  {intelligence.trending_skills?.length ? (
-                    <div className="flex flex-wrap gap-2">
-                      {intelligence.trending_skills.map((s, i) => (
-                        <span key={i} className="px-2 py-1 bg-[#F1F5F9] rounded-lg text-xs">{s}</span>
-                      ))}
+              <div className="space-y-8">
+                {/* Match Score Header */}
+                <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+                  <div className="flex flex-col sm:flex-row items-center gap-6">
+                    <MatchRing score={intelligence.overallMatchScore || matchScore} />
+                    <div className="flex-1 space-y-2">
+                      <h3 className="font-semibold text-[#0F172A] text-lg">
+                        {intelligence.matchCategory || 'Analysis'} Match
+                      </h3>
+                      <p className="text-sm text-[#64748B]">
+                        {intelligence.matchSummary || intelligence.market_demand || 'AI-powered analysis of your profile against this role.'}
+                      </p>
                     </div>
-                  ) : 'Trending skills data not available.'}
-                </IntelCard>
+                  </div>
+                </div>
+
+                {/* Two Column Layout: Intelligence + Roadmap */}
+                <div className="grid lg:grid-cols-2 gap-6">
+                  {/* LEFT: AI Intelligence */}
+                  <div className="space-y-6">
+                    <h3 className="font-semibold text-[#0F172A] flex items-center gap-2">
+                      <BarChart3 size={18} className="text-[#2563EB]" />
+                      AI Intelligence
+                    </h3>
+                    
+                    <IntelCard icon={TrendingUp} title="Market Demand" color="blue">
+                      {intelligence.market_demand || 'Demand data not available for this role.'}
+                    </IntelCard>
+                    
+                    <IntelCard icon={DollarSign} title="Salary Benchmark" color="emerald">
+                      {intelligence.salary_benchmark || 'Benchmark data not available.'}
+                    </IntelCard>
+                    
+                    <IntelCard icon={Shield} title="Competition Level" color="amber">
+                      {intelligence.competition_level || 'Competition analysis not available.'}
+                    </IntelCard>
+                    
+                    <IntelCard icon={Zap} title="Growth Trajectory" color="rose">
+                      {intelligence.growth_trajectory || 'Growth data not available.'}
+                    </IntelCard>
+                    
+                    <IntelCard icon={Award} title="Top Skills Trending" color="blue">
+                      {intelligence.trending_skills?.length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {intelligence.trending_skills.map((s, i) => (
+                            <span key={i} className="px-2 py-1 bg-[#F1F5F9] rounded-lg text-xs">{s}</span>
+                          ))}
+                        </div>
+                      ) : 'Trending skills data not available.'}
+                    </IntelCard>
+                  </div>
+
+                  {/* RIGHT: Career Roadmap (Phase 3) */}
+                  <div className="space-y-6">
+                    <h3 className="font-semibold text-[#0F172A] flex items-center gap-2">
+                      <BookOpen size={18} className="text-[#2563EB]" />
+                      Career Roadmap
+                    </h3>
+
+                    {/* Skill Gap */}
+                    {intelligence.missingTechnicalSkills?.length > 0 && (
+                      <IntelCard icon={Target} title="Skill Gap" color="rose">
+                        <div className="space-y-3">
+                          {intelligence.missingTechnicalSkills.slice(0, 5).map((skill, i) => (
+                            <div key={i} className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-[#0F172A]">{skill.skill}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    skill.learningPriority >= 8 ? 'bg-red-100 text-red-700' :
+                                    skill.learningPriority >= 5 ? 'bg-amber-100 text-amber-700' :
+                                    'bg-blue-100 text-blue-700'
+                                  }`}>
+                                    Priority {skill.learningPriority}/10
+                                  </span>
+                                </div>
+                                <p className="text-xs text-[#64748B] mt-1">{skill.gapDescription}</p>
+                              </div>
+                              <span className="text-xs text-[#94A3B8] whitespace-nowrap ml-2">{skill.estimatedWeeks}w</span>
+                            </div>
+                          ))}
+                        </div>
+                      </IntelCard>
+                    )}
+
+                    {/* Learning Timeline */}
+                    {intelligence.estimatedTimeline?.totalWeeks > 0 && (
+                      <IntelCard icon={Clock} title="Learning Timeline" color="purple">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-[#0F172A]">Total Duration</span>
+                            <span className="text-sm font-bold text-[#2563EB]">{intelligence.estimatedTimeline.totalWeeks} weeks</span>
+                          </div>
+                          {intelligence.estimatedTimeline.phases?.map((phase, i) => (
+                            <div key={i} className="flex items-start gap-3">
+                              <div className="w-6 h-6 rounded-full bg-[#2563EB]/10 flex items-center justify-center text-xs font-bold text-[#2563EB] shrink-0">
+                                {phase.phase}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-[#0F172A]">{phase.name}</p>
+                                <p className="text-xs text-[#64748B]">{phase.durationWeeks} weeks • {phase.skills?.join(', ')}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </IntelCard>
+                    )}
+
+                    {/* Certifications */}
+                    {intelligence.recommendedCertifications?.length > 0 && (
+                      <IntelCard icon={Award} title="Recommended Certifications" color="blue">
+                        <div className="space-y-3">
+                          {intelligence.recommendedCertifications.slice(0, 3).map((cert, i) => (
+                            <div key={i} className="flex items-start gap-2">
+                              <CheckCircle2 size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-sm font-medium text-[#0F172A]">{cert.name}</p>
+                                <p className="text-xs text-[#64748B]">{cert.provider} • {cert.estimatedDuration} • {cert.estimatedCost}</p>
+                                <p className="text-xs text-[#2563EB] mt-0.5">{cert.careerImpact}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </IntelCard>
+                    )}
+
+                    {/* Portfolio Projects */}
+                    {intelligence.recommendedPortfolioProjects?.length > 0 && (
+                      <IntelCard icon={Briefcase} title="Portfolio Projects" color="emerald">
+                        <div className="space-y-3">
+                          {intelligence.recommendedPortfolioProjects.slice(0, 3).map((project, i) => (
+                            <div key={i} className="border-l-2 border-emerald-200 pl-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-[#0F172A]">{project.title}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  project.complexity === 'Beginner' ? 'bg-emerald-100 text-emerald-700' :
+                                  project.complexity === 'Intermediate' ? 'bg-amber-100 text-amber-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>{project.complexity}</span>
+                              </div>
+                              <p className="text-xs text-[#64748B] mt-1">{project.description}</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {project.technologies?.map((tech, j) => (
+                                  <span key={j} className="text-xs bg-[#F1F5F9] px-2 py-0.5 rounded">{tech}</span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </IntelCard>
+                    )}
+
+                    {/* Next Career Role */}
+                    {intelligence.nextCareerRole?.role && (
+                      <IntelCard icon={TrendingUp} title="Next Career Role" color="purple">
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-[#0F172A]">{intelligence.nextCareerRole.role}</p>
+                          <p className="text-xs text-[#64748B]">Timeline: {intelligence.nextCareerRole.timeline}</p>
+                          <p className="text-xs text-[#64748B]">Salary: {intelligence.nextCareerRole.salaryRange}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {intelligence.nextCareerRole.requirements?.map((req, i) => (
+                              <span key={i} className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded">{req}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </IntelCard>
+                    )}
+
+                    {/* Salary Projection */}
+                    {intelligence.salaryProjection?.growthPercentage > 0 && (
+                      <IntelCard icon={DollarSign} title="Salary Projection" color="emerald">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-[#64748B]">Current Estimate</span>
+                            <span className="text-sm text-[#0F172A]">{intelligence.salaryProjection.currentEstimate}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-[#64748B]">After Skill Acquisition</span>
+                            <span className="text-sm font-semibold text-emerald-600">{intelligence.salaryProjection.afterSkillAcquisition}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-[#64748B]">Growth</span>
+                            <span className="text-sm font-bold text-emerald-600">+{intelligence.salaryProjection.growthPercentage}%</span>
+                          </div>
+                        </div>
+                      </IntelCard>
+                    )}
+
+                    {/* Actionable Next Steps */}
+                    {intelligence.actionableNextSteps?.length > 0 && (
+                      <IntelCard icon={Zap} title="Next Steps" color="amber">
+                        <div className="space-y-3">
+                          {intelligence.actionableNextSteps.map((step, i) => (
+                            <div key={i} className="flex items-start gap-3">
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                                step.urgency === 'Immediate' ? 'bg-red-100 text-red-700' :
+                                step.urgency === 'This Week' ? 'bg-amber-100 text-amber-700' :
+                                'bg-blue-100 text-blue-700'
+                              }`}>
+                                {step.step}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-[#0F172A]">{step.action}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-[#94A3B8]">{step.urgency}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    step.impact === 'High' ? 'bg-emerald-100 text-emerald-700' :
+                                    step.impact === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                                    'bg-[#F1F5F9] text-[#64748B]'
+                                  }`}>{step.impact} Impact</span>
+                                </div>
+                                <p className="text-xs text-[#64748B] mt-1">{step.expectedOutcome}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </IntelCard>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </motion.div>
