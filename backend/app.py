@@ -17,6 +17,7 @@ from datetime import datetime
 from services.ai_job_intelligence import analyze_job_intelligence, match_cv_to_job
 from services.ai_skill_analytics import analyze_skills
 from services.cv_optimizer import optimize_cv as cv_optimize
+from routes.ai_career_intelligence import ai_career_bp
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -36,6 +37,7 @@ jwt = JWTManager(app)
 db.init_app(app)
 bcrypt.init_app(app)
 app.register_blueprint(auth_bp)
+app.register_blueprint(ai_career_bp)
 
 with app.app_context():
     db.create_all()
@@ -270,383 +272,345 @@ def upload_cv():
                     }), 200
                 except Exception as e:
                     traceback.print_exc()
-                    return jsonify({'error': f'Processing failed: {str(e)}'}), 500
+                    return jsonify({'error': 'Failed to parse CV', 'details': str(e)}), 500
             else:
-                return jsonify({'error': 'File type not allowed. Only PDF and DOCX.'}), 400
+                return jsonify({'error': 'Invalid file type. Only PDF and DOCX allowed.'}), 400
+        else:
+            # Handle text-only CV paste
+            data = request.get_json(silent=True) or {}
+            cv_text = data.get('cv_text', '').strip()
+            if not cv_text:
+                return jsonify({'error': 'No CV file or text provided'}), 400
 
-        # Text paste fallback
-        data = request.get_json(silent=True)
-        if not data or 'cv_text' not in data:
-            return jsonify({'error': 'No CV file or text provided'}), 400
+            skills = extract_skills(cv_text)
+            
+            # Persist text CV
+            user.cv_data = json.dumps({
+                'extracted_info': {},
+                'extracted_skills': skills,
+                'cleaned_text': cv_text[:10000],
+                'raw_text': cv_text[:5000]
+            })
+            user.cv_uploaded_at = datetime.utcnow()
+            db.session.commit()
 
-        cv_text = data['cv_text']
-        skills = extract_skills(cv_text)
-
-        # Persist text CV
-        user.cv_data = json.dumps({
-            'extracted_info': {
-                'full_name': None,
-                'email': None,
-                'phone': None,
-                'location': data.get('location') or None,
-                'years_experience': None,
-                'education': None,
-                'latest_job_title': None,
-                'current_company': None,
-                'certifications': []
-            },
-            'extracted_skills': skills,
-            'cleaned_text': cv_text[:5000],
-            'raw_text': cv_text[:5000]
-        })
-        user.cv_uploaded_at = datetime.utcnow()
-        db.session.commit()
-
-        return jsonify({
-            'message': 'CV text processed successfully',
-            'extracted_skills': skills,
-            'extracted_info': {
-                'full_name': None,
-                'email': None,
-                'phone': None,
-                'location': data.get('location') or None,
-                'years_experience': None,
-                'education': None,
-                'latest_job_title': None,
-                'current_company': None,
-                'certifications': []
-            },
-            'cleaned_text': cv_text[:500] + '...',
-            'user': user.to_dict()
-        }), 200
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
-
-# ========== RECOMMENDATIONS ==========
-
-@app.route('/recommend_jobs', methods=['POST'])
-@jwt_required()
-def recommend_jobs():
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Missing request body'}), 400
-
-        cv_text = data.get('cv_text', '').strip()
-        location = data.get('location', '').strip()
-        filters = data.get('filters', {})
-
-        # Load from user if no cv_text provided
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
-        if not cv_text and user and user.cv_data:
-            try:
-                stored = json.loads(user.cv_data)
-                cv_text = stored.get('cleaned_text', '') or stored.get('raw_text', '')
-            except:
-                pass
-
-        skills_data = extract_skills(cv_text) if cv_text else {'technical': [], 'soft': []}
-        user_skills = skills_data['technical']
-
-        keyword = data.get('keyword', '').strip()
-        if not keyword:
-            cv_lower = cv_text.lower()
-            title_patterns = [
-                'senior software engineer', 'software engineer', 'full stack developer',
-                'backend developer', 'frontend developer', 'devops engineer',
-                'data scientist', 'data engineer', 'machine learning engineer',
-                'cloud engineer', 'site reliability engineer', 'mobile developer',
-                'web developer', 'python developer', 'react developer', 'java developer'
-            ]
-            detected_title = None
-            for title in title_patterns:
-                if title in cv_lower:
-                    detected_title = title
-                    break
-            if detected_title:
-                keyword = detected_title
-            elif user_skills:
-                keyword = f"{user_skills[0]} developer"
-            else:
-                keyword = 'software engineer'
-
-        print(f"[Recommend] Keyword: '{keyword}' | Location: '{location}' | Skills: {user_skills[:5]}")
-
-        real_jobs = fetch_real_jobs(keyword, location, num_pages=2)
-
-        if not real_jobs:
             return jsonify({
-                'recommendations': [],
-                'summary': {
-                    'total_jobs': 0,
-                    'average_match': 0,
-                    'top_career': 'N/A',
-                    'highest_salary': 'N/A'
-                }
+                'message': 'CV text processed successfully',
+                'extracted_skills': skills,
+                'user': user.to_dict()
             }), 200
 
-        results = []
-        for job in real_jobs:
-            job_text = (job.get('description', '') + ' ' + job.get('title', '')).lower()
-            matched_skills = [skill for skill in user_skills if skill.lower() in job_text]
-            match_score = min(98, 25 + len(matched_skills) * 12) if matched_skills else 15
-
-            if filters.get('remote') is True and not job.get('remote'):
-                continue
-            if filters.get('experience_level'):
-                if filters['experience_level'].lower() not in job.get('experience_level', '').lower():
-                    continue
-            if filters.get('industry'):
-                if filters['industry'].lower() not in job.get('industry', '').lower():
-                    continue
-
-            results.append({
-                'job_id': job.get('job_id'),
-                'title': job.get('title'),
-                'company': job.get('company'),
-                'location': job.get('location'),
-                'description': job.get('description', '')[:400] + '...' if len(job.get('description', '')) > 400 else job.get('description', ''),
-                'apply_link': job.get('apply_link'),
-                'salary_range': job.get('salary_range', 'N/A'),
-                'match_score': match_score,
-                'remote': job.get('remote', False),
-                'experience_level': job.get('experience_level', 'N/A'),
-                'industry': job.get('industry', 'N/A')
-            })
-
-        results.sort(key=lambda x: x['match_score'], reverse=True)
-        avg_match = sum(r['match_score'] for r in results) / len(results) if results else 0
-        highest_salary = max([r['salary_range'] for r in results], default='N/A')
-
-        return jsonify({
-            'recommendations': results[:20],
-            'summary': {
-                'total_jobs': len(results),
-                'average_match': round(avg_match, 1),
-                'top_career': results[0]['title'] if results else 'N/A',
-                'highest_salary': highest_salary
-            }
-        }), 200
-
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
+        return jsonify({'error': 'Server error during CV upload', 'details': str(e)}), 500
 
-# ========== JOB LINKS ==========
+# ========== JOB RECOMMENDATIONS ==========
 
-@app.route('/get_job_links', methods=['GET'])
-def get_job_links():
-    query = request.args.get('query', 'software engineer')
-    location = request.args.get('location', '')
-    jobs = fetch_real_jobs(query, location, num_pages=1)
-    job_links = [{
-        'job_id': job['job_id'],
-        'title': job['title'],
-        'company': job['company'],
-        'apply_link': job['apply_link']
-    } for job in jobs[:10]]
-    return jsonify(job_links), 200
-
-# ========== ANALYTICS ==========
-
-@app.route('/analytics', methods=['POST'])
+@app.route('/recommendations', methods=['POST'])
 @jwt_required()
-def get_analytics():
+def get_recommendations():
     try:
-        data = request.get_json()
-        if not data or 'cv_text' not in data:
-            return jsonify({'error': 'Missing cv_text'}), 400
-
-        cv_text = data['cv_text']
-        skills = extract_skills(cv_text)
-        experience_years = data.get('experience_years')
-
-        # Traditional analytics (preserved for existing charts)
-        market_demand = {
-            'python': 98, 'javascript': 95, 'react': 92, 'docker': 88,
-            'aws': 90, 'kubernetes': 85, 'sql': 94, 'git': 96,
-            'typescript': 89, 'node': 87, 'fastapi': 78, 'django': 82,
-            'tensorflow': 75, 'system design': 80
-        }
-
-        skill_analysis = []
-        for skill in skills['technical']:
-            demand = market_demand.get(skill.lower(), 70)
-            mentions = cv_text.lower().count(skill.lower())
-            confidence = min(99, 70 + mentions * 5)
-
-            skill_analysis.append({
-                'name': skill,
-                'level': 'Advanced' if mentions > 2 else 'Intermediate',
-                'confidence': confidence,
-                'market_demand': demand,
-                'mentions': mentions
-            })
-
-        all_skills = set(s['name'].lower() for s in skill_analysis)
-        recommendations = []
-        if 'aws' not in all_skills:
-            recommendations.append({'skill': 'AWS', 'reason': 'High demand in cloud-native roles', 'priority': 'High'})
-        if 'kubernetes' not in all_skills:
-            recommendations.append({'skill': 'Kubernetes', 'reason': 'Essential for DevOps and scaling', 'priority': 'High'})
-        if 'system design' not in all_skills:
-            recommendations.append({'skill': 'System Design', 'reason': 'Required for senior engineering roles', 'priority': 'Medium'})
-        if 'tensorflow' not in all_skills and 'pytorch' not in all_skills:
-            recommendations.append({'skill': 'TensorFlow', 'reason': 'Growing demand in AI/ML engineering', 'priority': 'Medium'})
-
-        # AI-POWERED ADVANCED ANALYTICS
-        ai_analysis = analyze_skills(
-            user_skills=skills['technical'],
-            experience_years=experience_years,
-            cv_text=cv_text
-        )
-
-        return jsonify({
-            # Existing data (preserved for charts)
-            'skill_match_score': round(sum(s['confidence'] for s in skill_analysis) / max(len(skill_analysis), 1), 1),
-            'technical_skills': skill_analysis,
-            'soft_skills': skills['soft'],
-            'learning_path': recommendations,
-            'experience_years': data.get('experience_years', 'Not detected'),
-
-            # NEW AI-POWERED DATA
-            'ai_analysis': {
-                'missing_skills': ai_analysis['missing_skills'],
-                'skills_requiring_improvement': ai_analysis['skills_requiring_improvement'],
-                'career_roadmap': ai_analysis['career_roadmap'],
-                'recommended_courses': ai_analysis['recommended_courses'],
-                'career_readiness': ai_analysis['career_readiness'],
-                'primary_domain': ai_analysis['primary_domain'],
-                'domain_insights': ai_analysis['domain_insights']
-            }
-        }), 200
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
-    
-# ========== JOB DETAILS ==========
-
-@app.route('/job/<job_id>', methods=['GET'])
-@jwt_required()
-def get_job_details(job_id):
-    """Get detailed job information with AI enrichment."""
-    try:
-        # In a real system, this would fetch from a jobs database
-        # For now, we reconstruct from the stored recommendation or fetch fresh
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
-        # Try to find in user's recent recommendations (stored in session or fetch fresh)
-        # For demo, we return a structured response that the frontend can use
+        data = request.get_json(silent=True) or {}
+        location = data.get('location', user.location or '').strip()
+        job_title = data.get('job_title', user.title or '').strip()
+
+        if not location and not job_title:
+            return jsonify({'error': 'Please provide location or job title'}), 400
+
+        # Fetch real jobs from JSearch API
+        jobs = fetch_real_jobs(query=job_title or 'software engineer', location=location or 'United States')
+
+        # Get user's CV text for matching
+        cv_text = ''
+        user_skills = []
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                cv_text = cv_data.get('raw_text', '') or cv_data.get('cleaned_text', '')
+                user_skills = cv_data.get('extracted_skills', [])
+            except (json.JSONDecodeError, AttributeError):
+                cv_text = user.cv_data
+
+        # Match jobs against CV
+        matched_jobs = matcher.match_jobs(cv_text, jobs, top_n=10)
+
+        # Add AI intelligence to top matches
+        enriched_jobs = []
+        for job in matched_jobs[:5]:
+            job_copy = dict(job)
+            try:
+                intelligence = analyze_job_intelligence(
+                    job_title=job.get('title', ''),
+                    job_description=job.get('description', ''),
+                    company=job.get('company', ''),
+                    industry=job.get('industry', '')
+                )
+                job_copy['ai_intelligence'] = intelligence
+            except Exception as e:
+                job_copy['ai_intelligence'] = {'error': str(e)}
+            enriched_jobs.append(job_copy)
+
+        # Add remaining jobs without intelligence
+        enriched_jobs.extend([dict(j) for j in matched_jobs[5:]])
+
         return jsonify({
-            'job_id': job_id,
-            'message': 'Use the job data stored from recommendations. This endpoint validates access.'
+            'jobs': enriched_jobs,
+            'total': len(enriched_jobs),
+            'location': location,
+            'query': job_title
         }), 200
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-
-# ========== CV MATCH ANALYSIS ==========
-
-@app.route('/cv_match', methods=['POST'])
-@jwt_required()
-def cv_match():
-    """Analyze how well a user's CV matches a specific job."""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Missing request body'}), 400
-
-        job_title = data.get('job_title', '')
-        job_description = data.get('job_description', '')
-        job_id = data.get('job_id', '')
-
-        # Get user's CV
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
-        if not user or not user.cv_data:
-            return jsonify({'error': 'No CV uploaded. Please upload your CV first.'}), 400
-
-        try:
-            cv_data = json.loads(user.cv_data)
-            cv_text = cv_data.get('cleaned_text', '') or cv_data.get('raw_text', '')
-            user_skills = cv_data.get('extracted_skills', {}).get('technical', [])
-        except:
-            return jsonify({'error': 'Corrupted CV data'}), 500
-
-        # AI-powered match analysis
-        result = match_cv_to_job(cv_text, job_title, job_description, user_skills)
-
-        return jsonify(result), 200
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
+        return jsonify({'error': 'Failed to get recommendations', 'details': str(e)}), 500
 
+# ========== AI JOB INTELLIGENCE (LEGACY) ==========
 
-# ========== JOB INTELLIGENCE ==========
-
-@app.route('/job_intelligence', methods=['POST'])
+@app.route('/job-intelligence', methods=['POST'])
 @jwt_required()
 def job_intelligence():
-    """Generate AI intelligence for a job posting."""
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Missing request body'}), 400
+        data = request.get_json(silent=True) or {}
+        job_title = data.get('job_title', '').strip()
+        job_description = data.get('job_description', '').strip()
 
-        job_title = data.get('job_title', '')
-        job_description = data.get('job_description', '')
-        company = data.get('company', '')
-        industry = data.get('industry', 'Technology')
+        if not job_title or not job_description:
+            return jsonify({'error': 'job_title and job_description are required'}), 400
 
-        # AI-powered job intelligence
-        result = analyze_job_intelligence(job_title, job_description, company, industry)
+        intelligence = analyze_job_intelligence(
+            job_title=job_title,
+            job_description=job_description,
+            company=data.get('company', ''),
+            industry=data.get('industry', '')
+        )
 
-        return jsonify(result), 200
+        return jsonify({'intelligence': intelligence}), 200
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
+        return jsonify({'error': 'Failed to analyze job', 'details': str(e)}), 500
 
+# ========== CV-JOB MATCHING ==========
 
-# ========== CV OPTIMIZATION (Phase 5 Preview) ==========
-
-@app.route('/optimize_cv', methods=['POST'])
+@app.route('/match-cv-job', methods=['POST'])
 @jwt_required()
-def optimize_cv():
-    """
-    AI-powered CV optimization for a target job.
-    """
+def match_cv_job():
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
-        if not user or not user.cv_data:
-            return jsonify({'error': 'No CV uploaded. Please upload your CV first.'}), 400
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
 
-        data = request.get_json()
-        job_title = data.get('job_title', '')
-        job_description = data.get('job_description', '')
+        data = request.get_json(silent=True) or {}
+        job_title = data.get('job_title', '').strip()
+        job_description = data.get('job_description', '').strip()
 
-        try:
-            cv_data = json.loads(user.cv_data)
-            cv_text = cv_data.get('cleaned_text', '') or cv_data.get('raw_text', '')
-        except:
-            return jsonify({'error': 'Corrupted CV data'}), 500
+        if not job_title or not job_description:
+            return jsonify({'error': 'job_title and job_description are required'}), 400
 
-        result = cv_optimize(cv_text, job_title, job_description)
-        return jsonify(result), 200
+        # Get user's CV text and skills
+        cv_text = ''
+        user_skills = []
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                cv_text = cv_data.get('raw_text', '') or cv_data.get('cleaned_text', '')
+                user_skills = cv_data.get('extracted_skills', [])
+            except (json.JSONDecodeError, AttributeError):
+                cv_text = user.cv_data
+
+        if not cv_text:
+            return jsonify({'error': 'No CV found. Please upload a CV first.'}), 400
+
+        match_result = match_cv_to_job(
+            cv_text=cv_text,
+            job_title=job_title,
+            job_description=job_description,
+            user_skills=user_skills
+        )
+
+        return jsonify({'match': match_result}), 200
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
+        return jsonify({'error': 'Failed to match CV to job', 'details': str(e)}), 500
 
+# ========== SKILL ANALYTICS ==========
+
+@app.route('/skill-analytics', methods=['POST'])
+@jwt_required()
+def skill_analytics():
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        target_role = data.get('target_role', '').strip()
+
+        if not target_role:
+            return jsonify({'error': 'target_role is required'}), 400
+
+        # Get user's skills from CV
+        user_skills = []
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                user_skills = cv_data.get('extracted_skills', [])
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+        if not user_skills:
+            return jsonify({'error': 'No skills found. Please upload a CV first.'}), 400
+
+        analytics = analyze_skills(
+            user_skills=user_skills,
+            target_role=target_role
+        )
+
+        return jsonify({'analytics': analytics}), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to analyze skills', 'details': str(e)}), 500
+
+# ========== CV OPTIMIZATION ==========
+
+@app.route('/optimize-cv', methods=['POST'])
+@jwt_required()
+def optimize_cv():
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Check premium access
+        if user.subscription_tier != 'premium':
+            return jsonify({
+                'error': 'CV optimization requires Premium subscription',
+                'upgrade_required': True
+            }), 403
+
+        data = request.get_json(silent=True) or {}
+        target_job = data.get('target_job', '').strip()
+
+        if not target_job:
+            return jsonify({'error': 'target_job is required'}), 400
+
+        # Get CV text
+        cv_text = ''
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                cv_text = cv_data.get('raw_text', '') or cv_data.get('cleaned_text', '')
+            except (json.JSONDecodeError, AttributeError):
+                cv_text = user.cv_data
+
+        if not cv_text:
+            return jsonify({'error': 'No CV found. Please upload a CV first.'}), 400
+
+        optimized = cv_optimize(
+            cv_text=cv_text,
+            target_job=target_job
+        )
+
+        return jsonify({
+            'optimized_cv': optimized.get('optimized_text', ''),
+            'improvements': optimized.get('improvements', []),
+            'ats_score_before': optimized.get('ats_score_before', 0),
+            'ats_score_after': optimized.get('ats_score_after', 0)
+        }), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to optimize CV', 'details': str(e)}), 500
+
+# ========== SAVED JOBS ==========
+
+@app.route('/saved-jobs', methods=['GET', 'POST', 'DELETE'])
+@jwt_required()
+def saved_jobs():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    if request.method == 'GET':
+        # Return saved jobs from user data (stored as JSON in cv_data for demo)
+        saved = []
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                saved = cv_data.get('saved_jobs', [])
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        return jsonify({'saved_jobs': saved}), 200
+
+    elif request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        job = data.get('job')
+
+        if not job:
+            return jsonify({'error': 'job data is required'}), 400
+
+        # Check save limits for free users
+        current_saved = []
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                current_saved = cv_data.get('saved_jobs', [])
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+        if user.subscription_tier != 'premium' and len(current_saved) >= Config.DEMO_FREE_FEATURES['maxJobSaves']:
+            return jsonify({
+                'error': 'Save limit reached. Upgrade to Demo Premium for unlimited saves.'
+            }), 403
+
+        # Add job to saved jobs
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                if 'saved_jobs' not in cv_data:
+                    cv_data['saved_jobs'] = []
+                cv_data['saved_jobs'].append(job)
+                user.cv_data = json.dumps(cv_data)
+            except (json.JSONDecodeError, AttributeError):
+                user.cv_data = json.dumps({'saved_jobs': [job]})
+        else:
+            user.cv_data = json.dumps({'saved_jobs': [job]})
+
+        db.session.commit()
+        return jsonify({'message': 'Job saved', 'saved_jobs': json.loads(user.cv_data).get('saved_jobs', [])}), 201
+
+    elif request.method == 'DELETE':
+        data = request.get_json(silent=True) or {}
+        job_id = data.get('job_id')
+
+        if not job_id:
+            return jsonify({'error': 'job_id is required'}), 400
+
+        if user.cv_data:
+            try:
+                cv_data = json.loads(user.cv_data)
+                saved = cv_data.get('saved_jobs', [])
+                cv_data['saved_jobs'] = [j for j in saved if j.get('id') != job_id and j.get('job_id') != job_id]
+                user.cv_data = json.dumps(cv_data)
+                db.session.commit()
+                return jsonify({'message': 'Job removed', 'saved_jobs': cv_data['saved_jobs']}), 200
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+        return jsonify({'error': 'Job not found'}), 404
+
+# ========== MAIN ==========
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)

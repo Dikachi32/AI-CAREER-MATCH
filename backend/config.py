@@ -23,6 +23,15 @@ class Config:
     JSEARCH_API_KEY = os.environ.get('JSEARCH_API_KEY')
     JSEARCH_API_HOST = os.environ.get('JSEARCH_API_HOST', 'jsearch.p.rapidapi.com')
     
+    # Gemini API configuration
+    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+    GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash ')
+    GEMINI_BASE_URL = os.environ.get('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/models')
+    GEMINI_TIMEOUT = int(os.environ.get('GEMINI_TIMEOUT', '30'))
+    GEMINI_MAX_RETRIES = int(os.environ.get('GEMINI_MAX_RETRIES', '3'))
+    GEMINI_RETRY_DELAY = float(os.environ.get('GEMINI_RETRY_DELAY', '1.0'))
+    GEMINI_RETRY_BACKOFF = float(os.environ.get('GEMINI_RETRY_BACKOFF', '2.0'))
+    
     # CORS settings
     CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:3000,https://localhost:3000').split(',')
     
