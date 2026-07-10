@@ -18,7 +18,8 @@
   }
 
   * {
-    @apply border-[#E2E8F0];
+    /* border removed from universal selector — was causing visual corruption */
+    box-sizing: border-box;
   }
 
   body {
@@ -214,7 +215,7 @@
   button, a, input, select, textarea {
     min-height: 44px;
   }
-  
+
   .section-padding {
     @apply px-4;
   }
@@ -230,7 +231,7 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  
+
   .animate-pulse,
   .animate-spin,
   .animate-bounce {
@@ -243,7 +244,7 @@
   .btn-primary {
     border: 2px solid currentColor;
   }
-  
+
   .card-hover {
     border: 2px solid #0F172A;
   }
@@ -254,12 +255,12 @@
   .no-print {
     display: none !important;
   }
-  
+
   body {
     background: white;
     color: black;
   }
-  
+
   .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl {
     box-shadow: none !important;
   }

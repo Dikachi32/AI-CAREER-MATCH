@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { getSubscription } from '../services/api';
 
 const SubscriptionContext = createContext();
 
@@ -61,6 +62,52 @@ export function SubscriptionProvider({ children }) {
     });
   }, [updateSubscription]);
 
+  // Sync with backend subscription state
+  const syncWithBackend = useCallback(async () => {
+    try {
+      const res = await getSubscription();
+      const backendSub = res.data;
+      if (backendSub) {
+        updateSubscription({
+          tier: backendSub.tier || 'free',
+          status: backendSub.status || 'active',
+          expiresAt: backendSub.expires_at || null,
+          isDemo: backendSub.is_demo !== undefined ? backendSub.is_demo : true,
+          features: backendSub.features || subscription.features,
+        });
+      }
+    } catch (err) {
+      // Silently fail — backend sync is best-effort
+      console.warn('Backend subscription sync failed:', err);
+    }
+  }, [updateSubscription, subscription.features]);
+
+  // Listen for subscription sync events from AuthContext
+  useEffect(() => {
+    const handleSync = (e) => {
+      const backendSub = e.detail;
+      if (backendSub) {
+        updateSubscription({
+          tier: backendSub.tier || 'free',
+          status: backendSub.status || 'active',
+          expiresAt: backendSub.expires_at || null,
+          isDemo: backendSub.is_demo !== undefined ? backendSub.is_demo : true,
+          features: backendSub.features || subscription.features,
+        });
+      }
+    };
+    window.addEventListener('subscription-sync', handleSync);
+    return () => window.removeEventListener('subscription-sync', handleSync);
+  }, [updateSubscription, subscription.features]);
+
+  // Initial sync with backend on mount (if authenticated)
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      syncWithBackend();
+    }
+  }, [syncWithBackend]);
+
   const isPremium = subscription.tier === 'premium';
 
   const value = {
@@ -68,7 +115,8 @@ export function SubscriptionProvider({ children }) {
     isPremium,
     updateSubscription,
     enableDemoPremium,
-    disableDemoPremium
+    disableDemoPremium,
+    syncWithBackend
   };
 
   return (

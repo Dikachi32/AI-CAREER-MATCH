@@ -2,6 +2,11 @@
 AI Interview Copilot — Phase 5
 Generates personalized interview preparation using Gemini AI.
 Adapts questions, answers, and tips to the user's CV and target job.
+
+Architecture:
+- Reads Gemini model name from config.Config.GEMINI_MODEL (single source of truth).
+- Uses the raw google.generativeai SDK directly (preserves generation_config support).
+- Centralized _get_gemini_model() reads model from Config, not hardcoded string.
 """
 
 import json
@@ -10,28 +15,29 @@ import re
 import traceback
 from typing import Dict, Any
 
-# ── Gemini client ──────────────────────────────────────────────────────────────
-_gemini_model = None
+# ── Centralized Gemini model resolution ────────────────────────────────────────
 
 def _get_gemini_model():
-    global _gemini_model
-    if _gemini_model is not None:
-        return _gemini_model
+    """
+    Initialize and return a Gemini GenerativeModel instance.
+    Model name is read from config.Config.GEMINI_MODEL (canonical source).
+    Falls back to environment variable, then to 'gemini-2.5-flash'.
+    """
+    import google.generativeai as genai
+    from config import Config
 
-    try:
-        import google.generativeai as genai
-        from config import Config
+    api_key = getattr(Config, 'GEMINI_API_KEY', None) or os.environ.get('GEMINI_API_KEY')
+    if not api_key:
+        raise RuntimeError('GEMINI_API_KEY not configured')
 
-        api_key = getattr(Config, 'GEMINI_API_KEY', None) or os.environ.get('GEMINI_API_KEY')
-        if not api_key:
-            raise RuntimeError('GEMINI_API_KEY not configured')
+    # Read model from centralized Config (single source of truth)
+    model_name = getattr(Config, 'GEMINI_MODEL', 'gemini-2.5-flash')
+    if not model_name:
+        model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
+    model_name = model_name.strip()
 
-        genai.configure(api_key=api_key)
-        _gemini_model = genai.GenerativeModel('gemini-2.5-flash')
-        return _gemini_model
-    except Exception as e:
-        print(f"[InterviewCopilot] Gemini init error: {e}")
-        raise
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel(model_name)
 
 
 # ── Prompt builder ─────────────────────────────────────────────────────────────
@@ -169,7 +175,7 @@ RULES:
 def _build_cv_summary(cv_data):
     """Build a concise CV summary from parsed CV data."""
     parts = []
-    info = cv_data.get('extracted_info', {})
+    info = cv_data.get('extracted_info', {}) if cv_data else {}
     if info.get('latest_job_title'):
         parts.append(f"Currently works as {info['latest_job_title']}")
     if info.get('current_company'):
@@ -179,7 +185,7 @@ def _build_cv_summary(cv_data):
     if info.get('education'):
         parts.append(f". Education: {info['education']}")
 
-    skills = cv_data.get('extracted_skills', {})
+    skills = cv_data.get('extracted_skills', {}) if cv_data else {}
     tech = skills.get('technical', [])
     if tech:
         parts.append(f". Technical skills include: {', '.join(tech[:15])}")

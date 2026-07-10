@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import api from '../services/api';
+import api, { getSubscription } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -16,7 +16,7 @@ export function AuthProvider({ children }) {
         setLoading(false);
         return;
       }
-      const res = await api.get('/profile');
+      const res = await api.get('/auth/profile');
       setUser(res.data.user);
       setError(null);
     } catch (err) {
@@ -34,13 +34,26 @@ export function AuthProvider({ children }) {
     fetchProfile();
   }, [fetchProfile]);
 
+  const syncSubscription = useCallback(async () => {
+    try {
+      const res = await getSubscription();
+      // Dispatch a custom event so SubscriptionContext can sync
+      window.dispatchEvent(new CustomEvent('subscription-sync', { detail: res.data }));
+    } catch (err) {
+      // Silently fail — subscription sync is best-effort
+      console.warn('Subscription sync failed:', err);
+    }
+  }, []);
+
   const login = useCallback(async (email, password) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post('/login', { email, password });
+      const res = await api.post('/auth/login', { email, password });
       localStorage.setItem('token', res.data.token);
       setUser(res.data.user);
+      // Sync subscription after login
+      await syncSubscription();
       return { success: true };
     } catch (err) {
       const msg = err.response?.data?.error || 'Login failed';
@@ -49,15 +62,17 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [syncSubscription]);
 
   const register = useCallback(async (email, password, name) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post('/register', { email, password, name });
+      const res = await api.post('/auth/register', { email, password, name });
       localStorage.setItem('token', res.data.token);
       setUser(res.data.user);
+      // Sync subscription after registration
+      await syncSubscription();
       return { success: true };
     } catch (err) {
       const msg = err.response?.data?.error || 'Registration failed';
@@ -66,7 +81,7 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [syncSubscription]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
@@ -78,7 +93,7 @@ export function AuthProvider({ children }) {
   const updateProfile = useCallback(async (data) => {
     setLoading(true);
     try {
-      const res = await api.put('/profile', data);
+      const res = await api.put('/auth/profile', data);
       setUser(res.data.user);
       return { success: true };
     } catch (err) {

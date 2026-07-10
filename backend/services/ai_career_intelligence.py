@@ -2,6 +2,9 @@
 AI Career Intelligence Service
 Phase 1 + Phase 3: Career Roadmap & Skill Gap Intelligence
 Generates structured AI Career Intelligence and personalized learning roadmaps.
+
+Uses centralized GeminiClient from clients.gemini_client.
+Model name is read from config.Config.GEMINI_MODEL (single source of truth).
 """
 
 import json
@@ -399,7 +402,7 @@ Be concise but specific. Every insight should be actionable."""
             logger.exception("Unexpected error in career intelligence generation")
             return self._get_degraded_response(str(e))
 
-    # ==================== PHASE 3 METHODS (NEW) ====================
+    # ==================== PHASE 3 METHODS (PRESERVED) ====================
 
     def _build_roadmap_prompt(
         self,
@@ -413,7 +416,6 @@ Be concise but specific. Every insight should be actionable."""
     ) -> str:
         """Construct the prompt for career roadmap generation (Phase 3)."""
 
-        # Build structured profile section if AIProfile exists
         profile_section = ""
         if ai_profile:
             profile_section = f"""
@@ -527,7 +529,6 @@ Respond with valid JSON ONLY. No markdown, no explanations outside JSON."""
             if result.get("success") and result.get("parsed_as_json"):
                 roadmap_data = result["data"]
 
-                # Validate all required keys
                 required_keys = [
                     "missingTechnicalSkills", "missingSoftSkills", "learningPriority",
                     "estimatedTimeline", "recommendedCertifications", "recommendedPortfolioProjects",
@@ -569,7 +570,6 @@ Respond with valid JSON ONLY. No markdown, no explanations outside JSON."""
         Generate both Phase 1 intelligence AND Phase 3 roadmap in a single call.
         Optimized for frontend consumption with all data in one response.
         """
-        # Build combined prompt
         profile_section = ""
         if ai_profile:
             profile_section = f"""
@@ -635,7 +635,6 @@ Be specific, realistic, and personalized. No generic advice."""
             if result.get("success") and result.get("parsed_as_json"):
                 data = result["data"]
 
-                # Ensure both sections exist
                 if "intelligence" not in data:
                     data["intelligence"] = self._get_fallback_intelligence()
                 if "roadmap" not in data:
@@ -671,7 +670,7 @@ Be specific, realistic, and personalized. No generic advice."""
                 "error": str(e)
             }
 
-    # ==================== FALLBACK METHODS ====================
+    # ==================== FALLBACK METHODS (PRESERVED) ====================
 
     def _handle_unstructured_response(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Handle non-JSON responses for Phase 1."""
@@ -938,19 +937,19 @@ Return JSON with: matchScore (0-100), category (Excellent/Good/Fair/Poor), topMa
             }
 
 
-# Singleton instance
+# ── Singleton & Convenience Functions ──────────────────────────────────────────
+
 _career_intelligence_service: Optional[AICareerIntelligenceService] = None
 
 
-def get_career_intelligence_service() -> AICareerIntelligenceService:
+def get_career_intelligence_service(gemini_client: Optional[GeminiClient] = None) -> AICareerIntelligenceService:
     """Get or create the singleton career intelligence service."""
     global _career_intelligence_service
     if _career_intelligence_service is None:
-        _career_intelligence_service = AICareerIntelligenceService()
+        _career_intelligence_service = AICareerIntelligenceService(gemini_client=gemini_client)
     return _career_intelligence_service
 
 
-# Phase 1 convenience functions (preserved)
 def generate_career_intelligence(
     cv_text: str,
     job_title: str,
@@ -981,7 +980,6 @@ def quick_match_score(
     return service.quick_match_score(cv_text, job_title, job_description)
 
 
-# Phase 3 convenience functions (new)
 def generate_career_roadmap(
     cv_text: str,
     job_title: str,

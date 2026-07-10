@@ -84,19 +84,19 @@ export const uploadCV = (data) => {
 export const getAIProfile = () => api.get('/ai_profile');
 
 // ========== RECOMMENDATIONS ==========
-export const recommendJobs = (payload) => api.post('/recommend_jobs', payload);
+export const recommendJobs = (payload) => api.post('/recommendations', payload);
 export const getJobLinks = () => api.get('/get_job_links');
 
 // ========== ANALYTICS ==========
-export const getAnalytics = (payload) => api.post('/analytics', payload);
+export const getAnalytics = (payload) => api.post('/skill-analytics', payload);
 export const getStats = () => api.get('/stats');
-export const getAdvancedAnalytics = (payload) => api.post('/analytics', payload);
+export const getAdvancedAnalytics = (payload) => api.post('/skill-analytics', payload);
 
 // ========== AUTH ==========
-export const getProfile = () => api.get('/profile');
-export const updateProfile = (data) => api.put('/profile', data);
-export const login = (data) => api.post('/login', data);
-export const register = (data) => api.post('/register', data);
+export const getProfile = () => api.get('/auth/profile');
+export const updateProfile = (data) => api.put('/auth/profile', data);
+export const login = (data) => api.post('/auth/login', data);
+export const register = (data) => api.post('/auth/register', data);
 
 // ========== SUBSCRIPTION ==========
 export const getSubscription = () => api.get('/subscription');
@@ -106,19 +106,19 @@ export default api;
 
 // ========== JOB DETAILS & INTELLIGENCE ==========
 export const getJobDetails = (jobId) => api.get(`/job/${jobId}`);
-export const getCVMatch = (payload) => api.post('/cv_match', payload);
-export const getJobIntelligence = (payload) => api.post('/job_intelligence', payload);
+export const getCVMatch = (payload) => api.post('/match-cv-job', payload);
+export const getJobIntelligence = (payload) => api.post('/job-intelligence', payload);
 
 // Phase 3: AI Career Roadmap & Skill Gap Intelligence
 export const getCareerRoadmap = (payload) => api.post('/api/v3/ai-career/roadmap', payload);
 export const getCombinedIntelligence = (payload) => api.post('/api/v3/ai-career/combined', payload);
 
 // Phase 4: AI CV Optimizer & ATS Enhancement
-export const optimizeCV = (payload) => api.post('/optimize_cv', payload);
-export const quickATSCheck = (payload) => api.post('/quick_ats_check', payload);
+export const optimizeCV = (payload) => api.post('/optimize-cv', payload);
+export const quickATSCheck = (payload) => api.post('/quick-ats-check', payload);
 
 // Phase 5: AI Interview Copilot
-export const getInterviewCopilot = (payload) => api.post('/interview_copilot', payload);
+export const getInterviewCopilot = (payload) => api.post('/interview-copilot', payload);
 
 // Phase 6: AI Career Coach Dashboard
-export const getCareerDashboard = (payload) => api.post('/career_dashboard', payload);
+export const getCareerDashboard = (payload) => api.post('/career-dashboard', payload);

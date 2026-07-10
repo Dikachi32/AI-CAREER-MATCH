@@ -4,8 +4,10 @@ Comprehensive career intelligence generation using the centralized GeminiClient.
 Integrates with AIProfile data, user CV, and job details to produce structured,
 frontend-ready JSON responses.
 
-This engine reuses the Phase 1 GeminiClient (clients/gemini_client.py) and
+This engine reuses the centralized GeminiClient (clients/gemini_client.py) and
 enhances prompt engineering for consistent, reliable, structured output.
+
+Model name is read from config.Config.GEMINI_MODEL (single source of truth).
 """
 
 import json
@@ -226,10 +228,8 @@ Your goal is to help candidates make informed career decisions and maximize thei
     ) -> str:
         """Construct the comprehensive Phase 2 intelligence prompt."""
 
-        # Build candidate profile section
         candidate_section = f"=== CANDIDATE CV ===\n{cv_text[:6000]}\n"
 
-        # If AIProfile exists, add structured data
         ai_profile_section = ""
         if ai_profile:
             ai_profile_section = f"""
@@ -256,7 +256,6 @@ Projects: {len(ai_profile.get_json_field('projects'))} project(s)
 Languages: {', '.join(ai_profile.get_json_field('languages'))}
 """
 
-        # Build job section
         company_section = f"Company: {company_name}\n" if company_name else ""
         industry_section = f"Industry: {industry}\n" if industry else ""
 
@@ -268,12 +267,10 @@ Job Description:
 {job_description[:5000]}
 """
 
-        # Build skills section
         skills_section = ""
         if user_skills:
             skills_section = f"\n=== EXTRACTED USER SKILLS ===\n{', '.join(user_skills)}\n"
 
-        # Comprehensive instructions
         instructions = """
 === ANALYSIS INSTRUCTIONS ===
 Generate a comprehensive AI Career Intelligence report as valid JSON.
@@ -499,7 +496,14 @@ Return JSON with:
                     "industryTrends": []
                 },
                 "learningRecommendations": [],
-                "personalizedNextSteps": [],
+                "personalizedNextSteps": [
+                    {
+                        "step": 1,
+                        "action": "Complete analysis for full report",
+                        "timeline": "Soon",
+                        "expectedOutcome": "Complete career intelligence"
+                    }
+                ],
                 "rawAnalysis": raw_text,
                 "parseError": True
             },
@@ -652,11 +656,11 @@ Return JSON with:
 _career_intelligence_engine: Optional[AICareerIntelligenceEngine] = None
 
 
-def get_career_intelligence_engine() -> AICareerIntelligenceEngine:
+def get_career_intelligence_engine(gemini_client: Optional[GeminiClient] = None) -> AICareerIntelligenceEngine:
     """Get or create the singleton Phase 2 engine."""
     global _career_intelligence_engine
     if _career_intelligence_engine is None:
-        _career_intelligence_engine = AICareerIntelligenceEngine()
+        _career_intelligence_engine = AICareerIntelligenceEngine(gemini_client=gemini_client)
     return _career_intelligence_engine
 
 

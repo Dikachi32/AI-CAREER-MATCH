@@ -15,6 +15,15 @@ class User(db.Model):
     company = db.Column(db.String(100), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Subscription fields (required by app.py)
+    subscription_tier = db.Column(db.String(20), nullable=False, default="free")
+    subscription_status = db.Column(db.String(20), nullable=False, default="active")
+    subscription_expires_at = db.Column(db.DateTime, nullable=True)
+
+    # CV data fields (required by app.py)
+    cv_data = db.Column(db.Text, nullable=True)
+    cv_uploaded_at = db.Column(db.DateTime, nullable=True)
+
     # Relationship to AI Profile
     ai_profile = db.relationship('AIProfile', backref='user', uselist=False, lazy=True)
 
@@ -27,7 +36,11 @@ class User(db.Model):
             'location': self.location,
             'title': self.title,
             'company': self.company,
-            'date_joined': self.created_at.isoformat() if self.created_at else None
+            'date_joined': self.created_at.isoformat() if self.created_at else None,
+            'subscription_tier': self.subscription_tier,
+            'subscription_status': self.subscription_status,
+            'subscription_expires_at': self.subscription_expires_at.isoformat() if self.subscription_expires_at else None,
+            'cv_uploaded_at': self.cv_uploaded_at.isoformat() if self.cv_uploaded_at else None,
         }
 
 

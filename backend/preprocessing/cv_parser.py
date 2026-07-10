@@ -34,12 +34,13 @@ def extract_text_from_docx(file_path: str) -> str:
 
 def parse_cv(file_path: str, file_type: str) -> dict:
     """
-    Parse a CV file and return raw text only.
+    Parse a CV file and return structured data compatible with app.py expectations.
+
     Args:
         file_path: Path to the uploaded file
         file_type: 'pdf' or 'docx'
     Returns:
-        dict with 'raw_text' key containing the full document text
+        dict with 'raw_text', 'cleaned_text', and 'extracted_info' keys
     """
     if file_type == 'pdf':
         raw = extract_text_from_pdf(file_path)
@@ -48,6 +49,9 @@ def parse_cv(file_path: str, file_type: str) -> dict:
     else:
         raise ValueError(f"Unsupported file type: {file_type}")
 
+    # Return structure compatible with app.py upload_cv() expectations
     return {
-        'raw_text': raw
+        'raw_text': raw,
+        'cleaned_text': raw,  # No additional cleaning at this stage; Gemini handles it
+        'extracted_info': {}   # Populated by Gemini service later
     }

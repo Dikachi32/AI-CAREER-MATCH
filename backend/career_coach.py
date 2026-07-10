@@ -2,6 +2,11 @@
 AI Career Coach & Dashboard — Phase 6
 Generates personalized career guidance using Gemini AI.
 Combines CV, skills, experience, and market intelligence.
+
+Architecture:
+- Reads Gemini model name from config.Config.GEMINI_MODEL (single source of truth).
+- Uses the raw google.generativeai SDK directly (preserves generation_config support).
+- Centralized _get_gemini_model() reads model from Config, not hardcoded string.
 """
 
 import json
@@ -10,29 +15,30 @@ import re
 import traceback
 from datetime import datetime, timedelta
 
-# ── Reuse existing Gemini client ───────────────────────────────────────────────
-_gemini_model = None
 
+# ── Centralized Gemini model resolution ────────────────────────────────────────
 
 def _get_gemini_model():
-    global _gemini_model
-    if _gemini_model is not None:
-        return _gemini_model
+    """
+    Initialize and return a Gemini GenerativeModel instance.
+    Model name is read from config.Config.GEMINI_MODEL (canonical source).
+    Falls back to environment variable, then to 'gemini-2.5-flash'.
+    """
+    import google.generativeai as genai
+    from config import Config
 
-    try:
-        import google.generativeai as genai
-        from config import Config
+    api_key = getattr(Config, 'GEMINI_API_KEY', None) or os.environ.get('GEMINI_API_KEY')
+    if not api_key:
+        raise RuntimeError('GEMINI_API_KEY not configured')
 
-        api_key = getattr(Config, 'GEMINI_API_KEY', None) or os.environ.get('GEMINI_API_KEY')
-        if not api_key:
-            raise RuntimeError('GEMINI_API_KEY not configured')
+    # Read model from centralized Config (single source of truth)
+    model_name = getattr(Config, 'GEMINI_MODEL', 'gemini-2.5-flash')
+    if not model_name:
+        model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
+    model_name = model_name.strip()
 
-        genai.configure(api_key=api_key)
-        _gemini_model = genai.GenerativeModel('gemini-2.5-flash')
-        return _gemini_model
-    except Exception as e:
-        print(f"[CareerCoach] Gemini init error: {e}")
-        raise
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel(model_name)
 
 
 # ── Prompt builder ─────────────────────────────────────────────────────────────
@@ -315,7 +321,6 @@ def _validate_and_fill(data):
         if key not in data or data[key] is None:
             data[key] = default
 
-    # Ensure nested objects have required keys
     if 'atsImprovementProgress' in data and data['atsImprovementProgress']:
         ats = data['atsImprovementProgress']
         ats.setdefault('currentScore', 60)

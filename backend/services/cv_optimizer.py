@@ -3,11 +3,13 @@ AI CV Optimizer & ATS Enhancement (Phase 4)
 Professional AI-powered resume optimization system using Gemini.
 Analyzes CV against job descriptions to provide ATS scores, keyword matching,
 rewritten sections, and actionable improvement plans.
+
+Uses centralized GeminiClient from clients.gemini_client.
+Model name is read from config.Config.GEMINI_MODEL (single source of truth).
 """
 
 import json
 import logging
-import re
 from typing import Dict, List, Any, Optional
 
 from clients.gemini_client import GeminiClient, GeminiAPIError, GeminiTimeoutError, GeminiParsingError
@@ -243,7 +245,7 @@ Job Description:
 CRITICAL RULES:
 - Preserve all factual information and achievements
 - Never invent metrics or experiences the candidate didn't have
-- Make passive voice active ("Responsible for" → "Led", "Managed" → "Drove")
+- Make passive voice active ("Responsible for" -> "Led", "Managed" -> "Drove")
 - Add quantifiable impact where possible (%, $, time saved)
 - Ensure every rewritten bullet starts with a strong action verb
 - Keep rewritten sections roughly the same length or slightly shorter
@@ -424,15 +426,16 @@ Return JSON:
         return fallbacks.get(section_name, [] if "Skills" in section_name or "Experience" in section_name or "Suggestions" in section_name or "Plan" in section_name else {})
 
 
-# Singleton instance
+# ── Singleton & Convenience Functions ──────────────────────────────────────────
+
 _cv_optimizer_engine: Optional[CVOptimizerEngine] = None
 
 
-def get_cv_optimizer_engine() -> CVOptimizerEngine:
+def get_cv_optimizer_engine(gemini_client: Optional[GeminiClient] = None) -> CVOptimizerEngine:
     """Get or create the singleton CV optimizer engine."""
     global _cv_optimizer_engine
     if _cv_optimizer_engine is None:
-        _cv_optimizer_engine = CVOptimizerEngine()
+        _cv_optimizer_engine = CVOptimizerEngine(gemini_client=gemini_client)
     return _cv_optimizer_engine
 
 

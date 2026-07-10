@@ -1,97 +1,102 @@
 """
 Phase 2 AI Career Intelligence API Routes
-New endpoints for comprehensive career intelligence engine.
+============================================
+
+Comprehensive career intelligence engine endpoints.
 Extends Phase 1 with full analysis capabilities.
+
+CORS is handled globally by the Application Factory (app.py).
+This module MUST NOT inject CORS headers manually.
+
+Blueprints exported:
+    ai_career_v2_bp   — Phase 2 V2 routes under /api/v2/ai-career
 """
 
 import logging
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from werkzeug.exceptions import BadRequest
 
 from models import db, User, AIProfile
 from services.ai_career_intelligence_engine import (
     get_career_intelligence_engine,
     generate_full_career_intelligence,
-    generate_quick_career_insight
+    generate_quick_career_insight,
 )
 
 logger = logging.getLogger(__name__)
 
-ai_career_v2_bp = Blueprint('ai_career_intelligence_v2', __name__, url_prefix='/api/v2/ai-career')
+# ── Blueprints ─────────────────────────────────────────────────────────────
+ai_career_v2_bp = Blueprint(
+    "ai_career_intelligence_v2",
+    __name__,
+    url_prefix="/api/v2/ai-career",
+)
 
 
-def _get_cors_headers():
-    """Get CORS headers from app config."""
-    from flask import current_app
-    origin = request.headers.get('Origin', '')
-    allowed_origins = current_app.config.get('CORS_ORIGINS', ['http://localhost:3000'])
-    headers = {}
-    if origin in allowed_origins:
-        headers['Access-Control-Allow-Origin'] = origin
-        headers['Access-Control-Allow-Credentials'] = 'true'
-    return headers
+# ── Validation Helpers (local to avoid circular imports) ────────────────────
+
+def _sanitize_string(value, max_length=500):
+    """Coerce to string, strip whitespace, truncate."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    return s[:max_length]
 
 
-def _success_response(data, status_code=200):
-    """Standardized success response."""
-    response = jsonify({
-        "success": True,
-        "data": data
-    })
-    response.status_code = status_code
-    for key, value in _get_cors_headers().items():
-        response.headers[key] = value
-    return response
+def _require_field(data, field, max_length=500):
+    """Extract and validate a required string field. Raises BadRequest if missing/empty."""
+    if not isinstance(data, dict):
+        raise BadRequest("Request body must be a JSON object.")
+    val = _sanitize_string(data.get(field, ""), max_length)
+    if not val:
+        raise BadRequest(f"`{field}` is required and cannot be empty.")
+    return val
 
 
-def _error_response(message, status_code=400, details=None):
-    """Standardized error response."""
-    payload = {
-        "success": False,
-        "error": message
-    }
-    if details:
-        payload["details"] = details
-    response = jsonify(payload)
-    response.status_code = status_code
-    for key, value in _get_cors_headers().items():
-        response.headers[key] = value
-    return response
+def _safe_error_details(exc):
+    """Return exception details ONLY in debug mode. Prevents info leakage."""
+    return str(exc) if current_app.debug else None
 
+
+# ── Helpers ────────────────────────────────────────────────────────────────
 
 def _get_user_cv_data(user: User) -> tuple:
     """
     Extract CV text and skills from user profile.
-    Returns (cv_text, user_skills, ai_profile)
+
+    Returns:
+        (cv_text: str, user_skills: list, ai_profile: AIProfile|None)
     """
-    cv_text = ''
+    cv_text = ""
     user_skills = []
     ai_profile = None
 
-    # Try AIProfile first (Phase 2 enhanced data)
+    # Phase 2: AIProfile first (enhanced structured data)
     ai_profile = AIProfile.query.filter_by(user_id=user.id).first()
-
     if ai_profile and ai_profile.raw_text:
         cv_text = ai_profile.raw_text
 
-    # Fallback to legacy cv_data
+    # Fallback: legacy cv_data blob
     if not cv_text and user.cv_data:
         try:
             import json
             cv_data = json.loads(user.cv_data)
-            cv_text = cv_data.get('raw_text', '') or cv_data.get('cleaned_text', '')
-            user_skills = cv_data.get('extracted_skills', [])
+            cv_text = cv_data.get("raw_text", "") or cv_data.get("cleaned_text", "")
+            user_skills = cv_data.get("extracted_skills", [])
         except (json.JSONDecodeError, AttributeError):
             cv_text = user.cv_data
 
-    # Extract skills from AIProfile if available
+    # Extract skills from AIProfile if still missing
     if ai_profile and not user_skills:
-        user_skills = ai_profile.get_json_field('technical_skills')
+        user_skills = ai_profile.get_json_field("technical_skills")
 
     return cv_text, user_skills, ai_profile
 
 
-@ai_career_v2_bp.route('/intelligence', methods=['POST', 'OPTIONS'])
+# ── Endpoints ──────────────────────────────────────────────────────────────
+
+@ai_career_v2_bp.route("/intelligence", methods=["POST"])
 @jwt_required()
 def career_intelligence_v2():
     """
@@ -107,70 +112,63 @@ def career_intelligence_v2():
         - industry (str, optional)
         - cv_text (str, optional) — overrides stored CV
     """
-    if request.method == 'OPTIONS':
-        response = jsonify({})
-        for key, value in _get_cors_headers().items():
-            response.headers[key] = value
-        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        return response, 204
-
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
         if not user:
-            return _error_response('User not found', 404)
+            return jsonify({"success": False, "error": "User not found"}), 404
 
         data = request.get_json(silent=True) or {}
 
-        job_title = data.get('job_title', '').strip()
-        job_description = data.get('job_description', '').strip()
-
-        if not job_title:
-            return _error_response('job_title is required', 400)
-        if not job_description:
-            return _error_response('job_description is required', 400)
+        job_title = _require_field(data, "job_title", max_length=200)
+        job_description = _require_field(data, "job_description", max_length=30_000)
 
         # Get user CV data (prioritizes AIProfile)
         cv_text, user_skills, ai_profile = _get_user_cv_data(user)
 
         # Allow CV text override from request
-        if data.get('cv_text', '').strip():
-            cv_text = data['cv_text'].strip()
+        if data.get("cv_text", "").strip():
+            cv_text = _sanitize_string(data["cv_text"], max_length=50_000)
 
         if not cv_text:
-            return _error_response(
-                'No CV data available. Please upload a CV first or provide cv_text.',
-                400
-            )
+            return jsonify({
+                "success": False,
+                "error": "No CV data available. Please upload a CV first or provide cv_text.",
+            }), 400
 
         # Generate Phase 2 intelligence
         result = generate_full_career_intelligence(
             cv_text=cv_text,
             job_title=job_title,
             job_description=job_description,
-            company_name=data.get('company_name'),
-            industry=data.get('industry'),
+            company_name=_sanitize_string(data.get("company_name"), 200) or None,
+            industry=_sanitize_string(data.get("industry"), 100) or None,
             ai_profile=ai_profile,
-            user_skills=user_skills
+            user_skills=user_skills,
         )
 
-        if result.get('success'):
-            return _success_response(result['data'])
-        else:
-            status = 503 if not result.get('data', {}).get('serviceAvailable', True) else 500
-            return _error_response(
-                'AI analysis service temporarily unavailable',
-                status,
-                details=result.get('data', {})
-            )
+        if result.get("success"):
+            return jsonify({"success": True, "data": result["data"]}), 200
 
+        status = 503 if not result.get("data", {}).get("serviceAvailable", True) else 500
+        return jsonify({
+            "success": False,
+            "error": "AI analysis service temporarily unavailable",
+            "details": result.get("data", {}),
+        }), status
+
+    except BadRequest as e:
+        return jsonify({"success": False, "error": str(e)}), 400
     except Exception as e:
         logger.exception("Unhandled exception in career_intelligence_v2")
-        return _error_response('Internal server error', 500, details=str(e) if request.app.debug else None)
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "details": _safe_error_details(e),
+        }), 500
 
 
-@ai_career_v2_bp.route('/quick-insight', methods=['POST', 'OPTIONS'])
+@ai_career_v2_bp.route("/quick-insight", methods=["POST"])
 @jwt_required()
 def quick_insight_v2():
     """
@@ -178,53 +176,53 @@ def quick_insight_v2():
 
     Lightweight quick insight for rapid feedback.
     """
-    if request.method == 'OPTIONS':
-        response = jsonify({})
-        for key, value in _get_cors_headers().items():
-            response.headers[key] = value
-        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        return response, 204
-
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
         if not user:
-            return _error_response('User not found', 404)
+            return jsonify({"success": False, "error": "User not found"}), 404
 
         data = request.get_json(silent=True) or {}
 
-        job_title = data.get('job_title', '').strip()
-        job_description = data.get('job_description', '').strip()
-
-        if not job_title or not job_description:
-            return _error_response('job_title and job_description are required', 400)
+        job_title = _require_field(data, "job_title", max_length=200)
+        job_description = _require_field(data, "job_description", max_length=30_000)
 
         cv_text, _, ai_profile = _get_user_cv_data(user)
 
-        if data.get('cv_text', '').strip():
-            cv_text = data['cv_text'].strip()
+        if data.get("cv_text", "").strip():
+            cv_text = _sanitize_string(data["cv_text"], max_length=50_000)
 
         if not cv_text:
-            return _error_response('No CV data available', 400)
+            return jsonify({"success": False, "error": "No CV data available"}), 400
 
         result = generate_quick_career_insight(
             cv_text=cv_text,
             job_title=job_title,
             job_description=job_description,
-            ai_profile=ai_profile
+            ai_profile=ai_profile,
         )
 
-        if result.get('success'):
-            return _success_response(result['data'])
-        return _error_response('Quick insight failed', 503, details=result.get('error'))
+        if result.get("success"):
+            return jsonify({"success": True, "data": result["data"]}), 200
 
+        return jsonify({
+            "success": False,
+            "error": "Quick insight failed",
+            "details": result.get("error"),
+        }), 503
+
+    except BadRequest as e:
+        return jsonify({"success": False, "error": str(e)}), 400
     except Exception as e:
         logger.exception("Unhandled exception in quick_insight_v2")
-        return _error_response('Internal server error', 500, details=str(e) if request.app.debug else None)
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "details": _safe_error_details(e),
+        }), 500
 
 
-@ai_career_v2_bp.route('/health', methods=['GET'])
+@ai_career_v2_bp.route("/health", methods=["GET"])
 def health_check_v2():
     """
     GET /api/v2/ai-career/health
@@ -236,11 +234,18 @@ def health_check_v2():
     try:
         client = get_gemini_client()
         health = client.health_check()
-        return _success_response({
-            'service': 'ai_career_intelligence_v2',
-            'gemini_api': health,
-            'phase': 2
-        })
+        return jsonify({
+            "success": True,
+            "data": {
+                "service": "ai_career_intelligence_v2",
+                "gemini_api": health,
+                "phase": 2,
+            },
+        }), 200
     except Exception as e:
-        logger.error(f"Phase 2 health check failed: {str(e)}")
-        return _error_response('Service health check failed', 503, details=str(e))
+        logger.error("Phase 2 health check failed: %s", str(e))
+        return jsonify({
+            "success": False,
+            "error": "Service health check failed",
+            "details": _safe_error_details(e),
+        }), 503
