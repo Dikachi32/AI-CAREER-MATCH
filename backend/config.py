@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -16,7 +17,7 @@ class Config:
     # ── Flask Core ───────────────────────────────────────────────────────────
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'jwt-dev-secret-change-in-production'
-    JWT_ACCESS_TOKEN_EXPIRES = 86400  # 24 hours
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES_HOURS', 24)))
     DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
     # ── Database ─────────────────────────────────────────────────────────────
@@ -37,7 +38,6 @@ class Config:
     JSEARCH_API_HOST = os.environ.get('JSEARCH_API_HOST', 'jsearch.p.rapidapi.com')
 
     # ── Gemini API Configuration ─────────────────────────────────────────────
-    # CRITICAL: .strip() removes accidental trailing whitespace from .env or defaults
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
     GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash').strip()
     GEMINI_BASE_URL = os.environ.get(
@@ -60,14 +60,9 @@ class Config:
     ]
 
     # ── Rate Limiting ────────────────────────────────────────────────────────
-    # Storage backend: memory for dev, redis for production.
-    # Example production: RATELIMIT_STORAGE_URI=redis://localhost:6379/0
     RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
     RATELIMIT_STRATEGY = os.environ.get('RATELIMIT_STRATEGY', 'fixed-window')
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() in ('true', '1', 'yes')
-
-    # Default limits applied when no endpoint-specific decorator is present.
-    # Format: "<requests>/<period>"  e.g. "60 per minute"
     RATELIMIT_DEFAULT = os.environ.get('RATELIMIT_DEFAULT', '200 per hour')
 
     # ── Demo Subscription Tiers ──────────────────────────────────────────────
@@ -90,7 +85,6 @@ class Config:
     }
 
     # ── Validation / Security Constants ──────────────────────────────────────
-    # Centralized here so all modules can import from a single source.
     MAX_JSON_PAYLOAD_SIZE = 2 * 1024 * 1024   # 2 MB
     MAX_CV_TEXT_LENGTH = 50_000               # characters
     MAX_JOB_DESC_LENGTH = 30_000              # characters
